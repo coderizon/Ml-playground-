@@ -20,6 +20,7 @@ const classNameInputs = [];
 const captureSlots = [];
 const dataCollectorButtons = [];
 const countChips = [];
+const switchCameraButtons = [];
 
 let currentStream;
 let activeClassIndex = 0;
@@ -33,6 +34,7 @@ let trainingDataOutputs = [];
 let examplesCount = [];
 let predict = false;
 let model;
+let preferredFacingMode = 'user';
 
 TRAIN_BUTTON.addEventListener('click', trainAndPredict);
 RESET_BUTTON.addEventListener('click', reset);
@@ -68,6 +70,7 @@ function setupClassCard(card, idx) {
   const openBtn = card.querySelector('.open-webcam');
   const panel = card.querySelector('.webcam-panel');
   const closeBtn = panel.querySelector('.icon-close');
+  const switchBtn = panel.querySelector('.switch-camera');
   const slot = card.querySelector('.capture-slot');
   const collectorBtn = card.querySelector('.dataCollector');
   const countChip = card.querySelector('.count-chip');
@@ -91,10 +94,14 @@ function setupClassCard(card, idx) {
   captureSlots[idx] = slot;
   dataCollectorButtons[idx] = collectorBtn;
   countChips[idx] = countChip;
+  if (switchBtn) {
+    switchCameraButtons[idx] = switchBtn;
+  }
 
   attachNameInputListener(nameInput, idx, collectorBtn);
   attachOpenButtonListener(openBtn, idx);
   attachCollectorButtonListeners(collectorBtn);
+  attachSwitchCameraListener(switchBtn);
 
   if (closeBtn) {
     closeBtn.setAttribute('data-close-panel', idx);
@@ -119,7 +126,10 @@ function buildClassCardElement(idx) {
     <div class="webcam-panel" data-class-panel="${idx}">
       <div class="panel-top">
         <span>Webcam</span>
-        <button class="icon-close" data-close-panel="${idx}" aria-label="Panel schließen">×</button>
+        <div class="panel-actions">
+          <button class="ghost switch-camera" data-switch-camera aria-label="Kamera wechseln">Außenkamera</button>
+          <button class="icon-close" data-close-panel="${idx}" aria-label="Panel schließen">×</button>
+        </div>
       </div>
       <div class="count-row">
         <span class="count-chip" data-count-for="${idx}">0 Bildbeispiele</span>
@@ -156,6 +166,22 @@ function attachNameInputListener(input, idx, collectorBtn) {
   });
 }
 
+function attachSwitchCameraListener(btn) {
+  if (!btn) return;
+  btn.addEventListener('click', () => {
+    preferredFacingMode = preferredFacingMode === 'user' ? 'environment' : 'user';
+    stopCurrentStream();
+    moveCaptureToSlot(activeClassIndex);
+    enableCam();
+    updateSwitchButtonsLabel();
+    STATUS.innerText =
+      preferredFacingMode === 'environment'
+        ? 'Außenkamera aktiviert.'
+        : 'Selfie-Kamera aktiviert.';
+  });
+  updateSwitchButtonsLabel();
+}
+
 function addNewClassCard() {
   const newIndex = CLASS_NAMES.length;
   const newCard = buildClassCardElement(newIndex);
@@ -179,13 +205,28 @@ function hasGetUserMedia() {
   return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 }
 
-async function enableCam() {
+function stopCurrentStream() {
+  if (!currentStream) return;
+  currentStream.getTracks().forEach((track) => track.stop());
+  currentStream = undefined;
+  videoPlaying = false;
+}
+
+function updateSwitchButtonsLabel() {
+  const targetLabel = preferredFacingMode === 'user' ? 'Außenkamera' : 'Selfie-Kamera';
+  switchCameraButtons.forEach((btn) => {
+    if (btn) btn.textContent = targetLabel;
+  });
+}
+
+async function enableCam(allowFallback = true) {
   if (!hasGetUserMedia()) {
     console.warn('getUserMedia() is not supported by your browser');
     return;
   }
 
-  const constraints = { video: { width: 640, height: 480 } };
+  const facingConstraint = preferredFacingMode === 'environment' ? { exact: 'environment' } : 'user';
+  const constraints = { video: { width: 640, height: 480, facingMode: facingConstraint } };
 
   if (currentStream) {
     attachStreamToVideos(currentStream);
@@ -197,6 +238,13 @@ async function enableCam() {
     attachStreamToVideos(currentStream);
   } catch (err) {
     console.error(err);
+    if (allowFallback && preferredFacingMode === 'environment') {
+      preferredFacingMode = 'user';
+      updateSwitchButtonsLabel();
+      STATUS.innerText = 'Außenkamera nicht verfügbar, Selfie-Kamera aktiviert.';
+      return enableCam(false);
+    }
+    STATUS.innerText = 'Webcam konnte nicht gestartet werden.';
   }
 }
 

@@ -231,6 +231,18 @@ body[data-step="preview"] .preview-column {
   align-items: center;
   color: var(--accent);
   font-weight: 600;
+  gap: 10px;
+}
+
+.panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.switch-camera {
+  padding: 8px 10px;
+  font-size: 13px;
 }
 
 .count-row {
