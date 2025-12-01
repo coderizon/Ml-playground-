@@ -12,6 +12,7 @@ const bodyEl = document.body;
 const supportsPointer = 'onpointerdown' in window;
 const addClassButton = document.getElementById('add-class');
 const classesColumn = document.querySelector('.classes-column');
+const probabilityList = document.getElementById('probabilityList');
 
 const CLASS_NAMES = [];
 const openWebcamButtons = [];
@@ -35,6 +36,16 @@ let examplesCount = [];
 let predict = false;
 let model;
 let preferredFacingMode = 'user';
+let lastPrediction = [];
+
+const BAR_COLORS = [
+  ['#f07818', '#ffd8ba'],
+  ['#d14ebd', '#ffd6f4'],
+  ['#5067ff', '#d4ddff'],
+  ['#28b88a', '#c8f1e3'],
+  ['#f2b134', '#ffe7bd'],
+  ['#8e54e9', '#e3d6ff'],
+];
 
 TRAIN_BUTTON.addEventListener('click', trainAndPredict);
 RESET_BUTTON.addEventListener('click', reset);
@@ -63,6 +74,7 @@ function initializeExistingClasses() {
   });
   rebuildModel();
   updateExampleCounts(true);
+  renderProbabilities();
 }
 
 function setupClassCard(card, idx) {
@@ -163,6 +175,7 @@ function attachNameInputListener(input, idx, collectorBtn) {
     CLASS_NAMES[idx] = input.value || `Class ${idx + 1}`;
     collectorBtn.setAttribute('data-name', CLASS_NAMES[idx]);
     STATUS.innerText = `Klasse ${idx + 1} benannt als ${CLASS_NAMES[idx]}.`;
+    renderProbabilities(lastPrediction);
   });
 }
 
@@ -198,6 +211,7 @@ function addNewClassCard() {
   previewReady = false;
   PREVIEW_VIDEO.classList.add('hidden');
   rebuildModel();
+  renderProbabilities();
   STATUS.innerText = `Neue Klasse ${CLASS_NAMES[newIndex]} hinzugefügt.`;
 }
 
@@ -210,6 +224,7 @@ function stopCurrentStream() {
   currentStream.getTracks().forEach((track) => track.stop());
   currentStream = undefined;
   videoPlaying = false;
+  renderProbabilities([]);
 }
 
 function updateSwitchButtonsLabel() {
@@ -317,15 +332,18 @@ function logProgress(epoch, logs) {
 }
 
 function showPreview() {
+  STATUS.innerText = '';
   PREVIEW_VIDEO.classList.remove('hidden');
   if (PREVIEW_VIDEO.readyState >= 2) {
     previewReady = true;
+    renderProbabilities(lastPrediction);
     return;
   }
   PREVIEW_VIDEO.addEventListener(
     'loadeddata',
     function onPreviewReady() {
       previewReady = true;
+      renderProbabilities(lastPrediction);
       PREVIEW_VIDEO.removeEventListener('loadeddata', onPreviewReady);
     },
     { once: true }
@@ -346,19 +364,72 @@ function predictLoop() {
 
       const imageFeatures = mobilenet.predict(resizedTensorFrame.expandDims());
       const prediction = model.predict(imageFeatures).squeeze();
-      const highestIndex = prediction.argMax().arraySync();
-      const predictionArray = prediction.arraySync();
-
-      STATUS.innerText =
-        'Prediction: ' +
-        CLASS_NAMES[highestIndex] +
-        ' with ' +
-        Math.floor(predictionArray[highestIndex] * 100) +
-        '% confidence';
+      const predictionArray = Array.from(prediction.arraySync());
+      const highestIndex =
+        predictionArray.length > 0
+          ? predictionArray.reduce(
+              (bestIdx, value, idx, arr) => (value > arr[bestIdx] ? idx : bestIdx),
+              0
+            )
+          : 0;
+      renderProbabilities(predictionArray, highestIndex);
     });
   }
 
   window.requestAnimationFrame(predictLoop);
+}
+
+function renderProbabilities(probArray = lastPrediction, bestIndex = -1) {
+  if (!probabilityList) return;
+
+  const safeValues = CLASS_NAMES.map((_, idx) => {
+    if (probArray && probArray[idx] !== undefined) return probArray[idx];
+    return 0;
+  });
+  lastPrediction = safeValues;
+
+  probabilityList.innerHTML = '';
+
+  CLASS_NAMES.forEach((name, idx) => {
+    const value = safeValues[idx] || 0;
+    const percent = Math.round(Math.max(0, Math.min(1, value)) * 100);
+    const row = document.createElement('div');
+    row.className = 'probability-row';
+    if (idx === bestIndex && predict) {
+      row.classList.add('is-top');
+    }
+
+    const label = document.createElement('div');
+    label.className = 'probability-label';
+    label.textContent = name || `Class ${idx + 1}`;
+
+    const bar = document.createElement('div');
+    bar.className = 'probability-bar';
+
+    const fill = document.createElement('div');
+    fill.className = 'probability-bar-fill';
+    const { start, end } = getBarColors(idx);
+    fill.style.setProperty('--bar-start', start);
+    fill.style.setProperty('--bar-end', end);
+    fill.style.width = `${percent}%`;
+
+    const valueEl = document.createElement('span');
+    valueEl.className = 'probability-value';
+    valueEl.textContent = `${percent}%`;
+
+    bar.appendChild(fill);
+    bar.appendChild(valueEl);
+
+    row.appendChild(label);
+    row.appendChild(bar);
+
+    probabilityList.appendChild(row);
+  });
+}
+
+function getBarColors(idx) {
+  const palette = BAR_COLORS[idx % BAR_COLORS.length];
+  return { start: palette[0], end: palette[1] };
 }
 
 function gatherDataForClass() {
@@ -423,6 +494,8 @@ function reset() {
   unlockCapturePanels();
   rebuildModel();
   updateExampleCounts(true);
+  lastPrediction = [];
+  renderProbabilities([]);
   setMobileStep('collect');
 
   console.log('Tensors in memory: ' + tf.memory().numTensors);

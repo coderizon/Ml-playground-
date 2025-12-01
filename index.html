@@ -101,10 +101,17 @@
             <button class="ghost" disabled>Modell exportieren</button>
           </div>
           <div class="preview-body">
-            <div class="preview-text">
-              <p id="status">Du musst links ein Modell trainieren, um es hier als Vorschau ansehen zu können.</p>
+            <div class="video-shell">
+              <video id="previewCam" autoplay muted playsinline class="hidden"></video>
             </div>
-            <video id="previewCam" autoplay muted playsinline class="hidden"></video>
+            <div class="preview-output">
+              <div class="preview-output-header">
+                <span class="preview-output-title">Ausgabe</span>
+                <span class="preview-output-hint">Wahrscheinlichkeiten pro Klasse</span>
+              </div>
+              <div id="probabilityList" class="probability-list"></div>
+            </div>
+            <p id="status" class="sr-only">Du musst links ein Modell trainieren, um es hier als Vorschau ansehen zu können.</p>
           </div>
         </div>
       </section>

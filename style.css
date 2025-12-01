@@ -403,15 +403,100 @@ button:disabled {
 
 .preview-card .preview-body {
   margin-top: 8px;
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
-.preview-text p {
-  margin: 0;
+.video-shell {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #0f1115;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.preview-output {
+  background: #f7f9ff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.preview-output-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.preview-output-title {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.preview-output-hint {
   color: var(--muted);
-  line-height: 1.5;
+  font-size: 13px;
+}
+
+.probability-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.probability-row {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.probability-row.is-top .probability-label {
+  color: var(--accent);
+}
+
+.probability-row.is-top .probability-bar {
+  box-shadow: 0 6px 14px rgba(63, 115, 255, 0.18);
+}
+
+.probability-label {
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.probability-bar {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  background: #eceff5;
+  overflow: hidden;
+}
+
+.probability-bar-fill {
+  position: absolute;
+  inset: 0;
+  width: var(--fill, 0%);
+  background: linear-gradient(90deg, var(--bar-start, #3f73ff), var(--bar-end, #9cb8ff));
+  transition: width 0.15s ease;
+}
+
+.probability-value {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
 .dashed {
@@ -441,6 +526,18 @@ button:disabled {
 
 .hidden {
   display: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .capture-slot video,
