@@ -1,0 +1,15 @@
+export const STATUS = document.getElementById('status');
+export const CAPTURE_VIDEO = document.getElementById('captureCam');
+export const PREVIEW_VIDEO = document.getElementById('previewCam');
+export const RESET_BUTTON = document.getElementById('reset');
+export const TRAIN_BUTTON = document.getElementById('train');
+export const GESTURE_OVERLAY = document.getElementById('gestureOverlay');
+export const mobileStepButtons = document.querySelectorAll('[data-step-target]');
+export const bodyEl = document.body;
+export const addClassButton = document.getElementById('add-class');
+export const classesColumn = document.querySelector('.classes-column');
+export const probabilityList = document.getElementById('probabilityList');
+export const menuButton = document.querySelector('.icon-button');
+export const modeMenu = document.getElementById('modeMenu');
+export const modeLabel = document.getElementById('modeLabel');
+export const connectArduinoButton = document.getElementById('connectArduino');
