@@ -22,6 +22,8 @@ export const state = {
   drawingUtils: null,
   gestureConnections: null,
   arduinoConnected: false,
+  microbitConnected: false,
+  calliopeConnected: false,
   lastSentLabel: null,
   lastSentAt: 0,
   classNames: [],

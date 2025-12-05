@@ -13,3 +13,5 @@ export const menuButton = document.querySelector('.icon-button');
 export const modeMenu = document.getElementById('modeMenu');
 export const modeLabel = document.getElementById('modeLabel');
 export const connectArduinoButton = document.getElementById('connectArduino');
+export const connectMicrobitButton = document.getElementById('connectMicrobit');
+export const connectCalliopeButton = document.getElementById('connectCalliope');

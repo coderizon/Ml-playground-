@@ -4,6 +4,16 @@ import {
   setArduinoConnectionListener,
 } from './bluetooth/arduino.js';
 import {
+  connectMicrobit,
+  isMicrobitConnected,
+  setMicrobitConnectionListener,
+} from './bluetooth/microbit.js';
+import {
+  connectCalliope,
+  isCalliopeConnected,
+  setCalliopeConnectionListener,
+} from './bluetooth/calliope.js';
+import {
   GESTURE_LABELS,
   MODE_NAMES,
   STOP_DATA_GATHER,
@@ -16,6 +26,8 @@ import {
   TRAIN_BUTTON,
   addClassButton,
   connectArduinoButton,
+  connectMicrobitButton,
+  connectCalliopeButton,
   menuButton,
   modeLabel,
   modeMenu,
@@ -107,30 +119,78 @@ document.addEventListener('click', (event) => {
   }
 });
 
-if (connectArduinoButton) {
-  setArduinoConnectionListener((connected) => {
-    state.arduinoConnected = connected;
-    connectArduinoButton.disabled = false;
-    connectArduinoButton.textContent = connected ? 'Arduino verbunden' : 'Arduino verbinden';
-    connectArduinoButton.classList.toggle('primary', connected);
-    connectArduinoButton.classList.toggle('ghost', !connected);
+setupBluetoothButton({
+  button: connectArduinoButton,
+  stateKey: 'arduinoConnected',
+  setListener: setArduinoConnectionListener,
+  isConnected: isArduinoConnected,
+  connect: connectArduino,
+  labels: {
+    connected: 'Arduino verbunden',
+    disconnected: 'Arduino verbinden',
+    already: 'Arduino ist bereits verbunden.',
+  },
+});
+
+setupBluetoothButton({
+  button: connectMicrobitButton,
+  stateKey: 'microbitConnected',
+  setListener: setMicrobitConnectionListener,
+  isConnected: isMicrobitConnected,
+  connect: connectMicrobit,
+  labels: {
+    connected: 'Micro:bit verbunden',
+    disconnected: 'Micro:bit verbinden',
+    already: 'Micro:bit ist bereits verbunden.',
+  },
+});
+
+setupBluetoothButton({
+  button: connectCalliopeButton,
+  stateKey: 'calliopeConnected',
+  setListener: setCalliopeConnectionListener,
+  isConnected: isCalliopeConnected,
+  connect: connectCalliope,
+  labels: {
+    connected: 'Calliope verbunden',
+    disconnected: 'Calliope verbinden',
+    already: 'Calliope ist bereits verbunden.',
+  },
+});
+
+function setupBluetoothButton({
+  button,
+  stateKey,
+  setListener,
+  isConnected,
+  connect,
+  labels,
+}) {
+  if (!button) return;
+
+  setListener((connected) => {
+    state[stateKey] = connected;
+    button.disabled = false;
+    button.textContent = connected ? labels.connected : labels.disconnected;
+    button.classList.toggle('primary', connected);
+    button.classList.toggle('ghost', !connected);
   });
 
-  connectArduinoButton.addEventListener('click', async () => {
-    if (state.arduinoConnected || isArduinoConnected()) {
-      alert('Arduino ist bereits verbunden.');
+  button.addEventListener('click', async () => {
+    if (state[stateKey] || isConnected()) {
+      alert(labels.already);
       return;
     }
-    connectArduinoButton.disabled = true;
-    connectArduinoButton.textContent = 'Verbinde...';
+    button.disabled = true;
+    button.textContent = 'Verbinde...';
     try {
-      await connectArduino();
+      await connect();
     } catch (error) {
       console.error(error);
     } finally {
-      if (!state.arduinoConnected) {
-        connectArduinoButton.disabled = false;
-        connectArduinoButton.textContent = 'Arduino verbinden';
+      if (!state[stateKey]) {
+        button.disabled = false;
+        button.textContent = labels.disconnected;
       }
     }
   });
