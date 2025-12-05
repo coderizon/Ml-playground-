@@ -15,3 +15,6 @@ export const modeLabel = document.getElementById('modeLabel');
 export const connectArduinoButton = document.getElementById('connectArduino');
 export const connectMicrobitButton = document.getElementById('connectMicrobit');
 export const connectCalliopeButton = document.getElementById('connectCalliope');
+export const epochsInput = document.getElementById('epochsInput');
+export const batchSizeInput = document.getElementById('batchSizeInput');
+export const learningRateInput = document.getElementById('learningRateInput');

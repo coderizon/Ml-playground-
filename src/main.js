@@ -28,6 +28,9 @@ import {
   connectArduinoButton,
   connectMicrobitButton,
   connectCalliopeButton,
+  epochsInput,
+  batchSizeInput,
+  learningRateInput,
   menuButton,
   modeLabel,
   modeMenu,
@@ -85,6 +88,7 @@ renderProbabilities([], -1, state.classNames);
 setMode('image');
 updateSwitchButtonsLabel();
 loadMobileNetFeatureModel();
+initHyperparamInputs();
 
 if (addClassButton) {
   addClassButton.addEventListener('click', () => {
@@ -157,6 +161,40 @@ setupBluetoothButton({
     already: 'Calliope ist bereits verbunden.',
   },
 });
+
+function initHyperparamInputs() {
+  bindHyperparamInput(epochsInput, 'trainingEpochs', {
+    fallback: 10,
+    parse: (value) => parseInt(value, 10),
+    min: 1,
+  });
+  bindHyperparamInput(batchSizeInput, 'trainingBatchSize', {
+    fallback: 5,
+    parse: (value) => parseInt(value, 10),
+    min: 1,
+  });
+  bindHyperparamInput(learningRateInput, 'trainingLearningRate', {
+    fallback: 0.001,
+    parse: (value) => parseFloat(value),
+    min: 0.000001,
+  });
+}
+
+function bindHyperparamInput(element, stateKey, { fallback, parse, min }) {
+  if (!element) return;
+
+  const applyValue = () => {
+    const parsed = parse(element.value);
+    const valid = Number.isFinite(parsed) && parsed >= min ? parsed : fallback;
+    state[stateKey] = valid;
+    element.value = valid;
+  };
+
+  element.value = state[stateKey] ?? fallback;
+  applyValue();
+  element.addEventListener('change', applyValue);
+  element.addEventListener('blur', applyValue);
+}
 
 function setupBluetoothButton({
   button,

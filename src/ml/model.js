@@ -21,6 +21,7 @@ export async function loadMobileNetFeatureModel() {
 
 export function rebuildModel() {
   const outputUnits = Math.max(state.classNames.length, 1);
+  const lr = sanitizeLearningRate(state.trainingLearningRate);
 
   if (state.model) {
     state.model.dispose();
@@ -31,10 +32,16 @@ export function rebuildModel() {
   state.model.add(tf.layers.dense({ units: outputUnits, activation: 'softmax' }));
 
   state.model.compile({
-    optimizer: 'adam',
+    optimizer: tf.train.adam(lr),
     loss: 'categoricalCrossentropy',
     metrics: ['accuracy'],
   });
 
   state.model.summary();
+}
+
+function sanitizeLearningRate(value) {
+  const lr = Number(value);
+  if (!Number.isFinite(lr) || lr <= 0) return 0.001;
+  return lr;
 }

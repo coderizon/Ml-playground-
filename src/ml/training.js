@@ -18,10 +18,12 @@ export async function trainAndPredict() {
   const oneHotOutputs = tf.oneHot(outputsAsTensor, state.classNames.length);
   const inputsAsTensor = tf.stack(state.trainingDataInputs);
 
+  const { batchSize, epochs } = getTrainingHyperparams();
+
   await state.model.fit(inputsAsTensor, oneHotOutputs, {
     shuffle: true,
-    batchSize: 5,
-    epochs: 10,
+    batchSize,
+    epochs,
     callbacks: { onEpochEnd: logProgress },
   });
 
@@ -38,6 +40,18 @@ export async function trainAndPredict() {
 
 function logProgress(epoch, logs) {
   console.log('Data for epoch ' + epoch, logs);
+}
+
+function getTrainingHyperparams() {
+  const safeBatchSize = sanitizeInteger(state.trainingBatchSize, 5);
+  const safeEpochs = sanitizeInteger(state.trainingEpochs, 10);
+  return { batchSize: safeBatchSize, epochs: safeEpochs };
+}
+
+function sanitizeInteger(value, fallback) {
+  const parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
 }
 
 export function showPreview() {
