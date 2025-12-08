@@ -41,6 +41,7 @@ body {
   display: grid;
   place-items: center;
   transition: all 0.2s ease;
+  position: relative;
 }
 
 .icon-button:hover {
@@ -51,7 +52,10 @@ body {
 .icon-lines {
   width: 18px;
   height: 12px;
-  position: relative;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   display: block;
 }
 
@@ -1034,6 +1038,7 @@ body.landing-active {
   display: flex;
   gap: 14px;
   width: max-content;
+  will-change: transform;
 }
 
 .marquee-group {
@@ -1212,8 +1217,7 @@ body.landing-active {
   }
 
   .model-marquee {
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: hidden;
   }
 
   .model-track {

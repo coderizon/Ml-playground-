@@ -73,32 +73,41 @@ function initMarqueeScroller() {
 
   const isMobileMarquee = window.matchMedia('(max-width: 640px)').matches;
   const AUTO_SPEED = isMobileMarquee ? 0.01 : 0.02; // px per ms, auf Mobile extra langsam
-  const SCROLL_DIRECTION = isMobileMarquee ? -1 : 1; // Mobile bewegt sich sichtbar nach rechts
+  const SCROLL_DIRECTION = isMobileMarquee ? 1 : -1; // Mobile bewegt sich sichtbar nach rechts
   let isDragging = false;
   let startX = 0;
-  let startScroll = 0;
+  let startOffset = 0;
+  let offset = 0;
   let lastTime = null;
   let autoScroll = true;
   let activePointerId = null;
 
-  const ensureLoop = () => {
-    const halfWidth = track.scrollWidth / 2;
-    if (halfWidth === 0) return;
-    if (marquee.scrollLeft >= halfWidth) {
-      marquee.scrollLeft -= halfWidth;
-    } else if (marquee.scrollLeft < 0) {
-      marquee.scrollLeft += halfWidth;
+  const loopWidth = () => track.scrollWidth / 2;
+
+  const wrapOffset = () => {
+    const half = loopWidth();
+    if (!half) return;
+    if (offset > half) {
+      offset -= half;
+    } else if (offset < -half) {
+      offset += half;
     }
   };
 
-  marquee.scrollLeft = track.scrollWidth / 4;
+  const applyTransform = () => {
+    track.style.transform = `translate3d(${offset}px, 0, 0)`;
+  };
+
+  wrapOffset();
+  applyTransform();
 
   const step = (timestamp) => {
     if (lastTime === null) lastTime = timestamp;
     const delta = timestamp - lastTime;
     if (autoScroll && !isDragging) {
-      marquee.scrollLeft += delta * AUTO_SPEED * SCROLL_DIRECTION;
-      ensureLoop();
+      offset += delta * AUTO_SPEED * SCROLL_DIRECTION;
+      wrapOffset();
+      applyTransform();
     }
     lastTime = timestamp;
     requestAnimationFrame(step);
@@ -111,7 +120,7 @@ function initMarqueeScroller() {
     isDragging = true;
     autoScroll = false;
     startX = event.clientX;
-    startScroll = marquee.scrollLeft;
+    startOffset = offset;
     marquee.classList.add('is-dragging');
   });
 
@@ -119,8 +128,9 @@ function initMarqueeScroller() {
     if (!isDragging || event.pointerId !== activePointerId) return;
     event.preventDefault();
     const delta = event.clientX - startX;
-    marquee.scrollLeft = startScroll - delta;
-    ensureLoop();
+    offset = startOffset + delta;
+    wrapOffset();
+    applyTransform();
   });
 
   const endDrag = (event) => {
@@ -135,6 +145,13 @@ function initMarqueeScroller() {
   window.addEventListener('pointerup', endDrag);
   window.addEventListener('pointercancel', endDrag);
   window.addEventListener('pointerleave', endDrag);
+
+  const handleResize = () => {
+    wrapOffset();
+    applyTransform();
+  };
+
+  window.addEventListener('resize', handleResize);
 }
 
 function initSideMenu() {
