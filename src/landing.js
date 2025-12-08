@@ -101,6 +101,7 @@ function initMarqueeScroller() {
 
   marquee.addEventListener('pointermove', (event) => {
     if (!isDragging || event.pointerId !== activePointerId) return;
+    event.preventDefault();
     const delta = event.clientX - startX;
     marquee.scrollLeft = startScroll - delta;
     ensureLoop();

@@ -903,6 +903,10 @@ body.landing-active {
   cursor: grab;
   -ms-overflow-style: none;
   scrollbar-width: none;
+  touch-action: pan-y;
+  -ms-touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .model-track {
