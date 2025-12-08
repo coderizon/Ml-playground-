@@ -790,6 +790,14 @@ body.landing-active {
   z-index: 1;
 }
 
+@media (max-width: 768px) {
+  .landing-shell {
+    border: none;
+    margin: 0;
+    padding: 0;
+  }
+}
+
 .landing-header {
   display: flex;
   align-items: center;
