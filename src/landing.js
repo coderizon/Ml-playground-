@@ -73,7 +73,7 @@ function initMarqueeScroller() {
 
   const isMobileMarquee = window.matchMedia('(max-width: 640px)').matches;
   const AUTO_SPEED = isMobileMarquee ? 0.01 : 0.02; // px per ms, auf Mobile extra langsam
-  const SCROLL_DIRECTION = isMobileMarquee ? 1 : -1; // Mobile bewegt sich sichtbar nach rechts
+  const SCROLL_DIRECTION = 1; // positiver Offset scrollt die Spur nach links (keine Lücke)
   let isDragging = false;
   let startX = 0;
   let startOffset = 0;
@@ -87,15 +87,12 @@ function initMarqueeScroller() {
   const wrapOffset = () => {
     const half = loopWidth();
     if (!half) return;
-    if (offset > half) {
-      offset -= half;
-    } else if (offset < -half) {
-      offset += half;
-    }
+    while (offset >= half) offset -= half;
+    while (offset < 0) offset += half;
   };
 
   const applyTransform = () => {
-    track.style.transform = `translate3d(${offset}px, 0, 0)`;
+    track.style.transform = `translate3d(${-offset}px, 0, 0)`;
   };
 
   wrapOffset();
@@ -128,7 +125,7 @@ function initMarqueeScroller() {
     if (!isDragging || event.pointerId !== activePointerId) return;
     event.preventDefault();
     const delta = event.clientX - startX;
-    offset = startOffset + delta;
+    offset = startOffset - delta;
     wrapOffset();
     applyTransform();
   });
