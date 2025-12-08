@@ -1212,12 +1212,13 @@ body.landing-active {
   }
 
   .model-marquee {
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
 
   .model-track {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
     gap: 12px;
     width: 100%;
   }
@@ -1232,10 +1233,34 @@ body.landing-active {
 
   .model-card {
     width: 100%;
-    min-width: 0;
+    min-width: 260px;
+    max-width: 360px;
+    animation-duration: 10s;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+  }
+
+  .model-card:nth-child(-n+2) {
+    animation-name: mobile-drift-left;
+  }
+
+  .model-card:nth-child(n+3) {
+    animation-name: mobile-drift-right;
   }
 
   .model-card-hero {
     height: 180px;
   }
+}
+
+@keyframes mobile-drift-left {
+  0% { transform: translateX(6px); }
+  50% { transform: translateX(-6px); }
+  100% { transform: translateX(6px); }
+}
+
+@keyframes mobile-drift-right {
+  0% { transform: translateX(-6px); }
+  50% { transform: translateX(6px); }
+  100% { transform: translateX(-6px); }
 }
