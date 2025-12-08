@@ -1117,7 +1117,7 @@ body.landing-active {
   display: flex;
   gap: 10px;
   margin-top: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .md-tag {
@@ -1205,15 +1205,34 @@ body.landing-active {
 
   .search-pill {
     width: 90vw;
-    max-width: none;
+    max-width: 50%;
     min-width: max-content;
     font-size: 16px;
     margin: 0 auto;
   }
 
+  .model-marquee {
+    overflow: hidden;
+  }
+
+  .model-track {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    width: 100%;
+  }
+
+  .marquee-group {
+    display: contents;
+  }
+
+  .marquee-group:nth-of-type(n+2) {
+    display: none;
+  }
+
   .model-card {
-    width: 260px;
-    min-width: 200px;
+    width: 100%;
+    min-width: 0;
   }
 
   .model-card-hero {

@@ -71,6 +71,11 @@ function initMarqueeScroller() {
   const track = marquee?.querySelector('.model-track');
   if (!marquee || !track) return;
 
+  // Disable marquee scroll on small screens; layout stacks in CSS.
+  if (window.matchMedia('(max-width: 640px)').matches) {
+    return;
+  }
+
   const AUTO_SPEED = 0.02; // px per ms, deutlich langsamer
   let isDragging = false;
   let startX = 0;
