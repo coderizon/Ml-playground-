@@ -975,6 +975,49 @@ body.landing-active {
   border-radius: 0;
   box-shadow: none;
   background: transparent;
+  opacity: 0;
+  transform: scale(0.6) rotate(-180deg);
+  transform-origin: center;
+  animation: logo-spin-in 0.5s ease-out 0.05s forwards;
+}
+
+.landing-identity .identity-word {
+  opacity: 0;
+}
+
+.landing-identity .identity-word:first-of-type {
+  transform: translateX(-10px);
+  animation: title-slide-left 0.4s ease-out 0.32s forwards;
+}
+
+.landing-identity .identity-word:last-of-type {
+  transform: translateX(10px);
+  animation: title-slide-right 0.4s ease-out 0.38s forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-identity .identity-logo,
+  .landing-identity .identity-word {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes logo-spin-in {
+  0% { opacity: 0; transform: scale(0.6) rotate(-180deg); }
+  60% { opacity: 1; transform: scale(1.06) rotate(400deg); }
+  100% { opacity: 1; transform: scale(1) rotate(360deg); }
+}
+
+@keyframes title-slide-left {
+  0% { opacity: 0; transform: translateX(-12px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes title-slide-right {
+  0% { opacity: 0; transform: translateX(12px); }
+  100% { opacity: 1; transform: translateX(0); }
 }
 
 .search-pill {
