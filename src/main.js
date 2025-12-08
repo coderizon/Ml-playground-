@@ -31,7 +31,6 @@ import {
   epochsInput,
   batchSizeInput,
   learningRateInput,
-  menuButton,
   modeLabel,
   modeMenu,
   mobileStepButtons,
@@ -103,8 +102,8 @@ if (addClassButton) {
   });
 }
 
-if (menuButton) {
-  menuButton.addEventListener('click', toggleModeMenu);
+if (modeLabel) {
+  modeLabel.addEventListener('click', toggleModeMenu);
 }
 
 if (modeMenu) {
@@ -118,8 +117,8 @@ if (modeMenu) {
 }
 
 document.addEventListener('click', (event) => {
-  if (!modeMenu || !menuButton) return;
-  if (!modeMenu.contains(event.target) && !menuButton.contains(event.target)) {
+  if (!modeMenu || !modeLabel) return;
+  if (!modeMenu.contains(event.target) && !modeLabel.contains(event.target)) {
     closeModeMenu();
   }
 });

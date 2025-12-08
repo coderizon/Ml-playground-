@@ -12,7 +12,7 @@
     <div id="landing-page" role="dialog" aria-label="Landing">
       <div class="landing-shell">
         <header class="landing-header">
-          <button class="icon-button landing-menu" aria-label="Menü öffnen">
+          <button class="icon-button landing-menu nav-toggle" aria-label="Menü öffnen" type="button">
             <span class="icon-lines"></span>
           </button>
         </header>
@@ -145,15 +145,14 @@
 
     <div id="app-shell" class="hidden">
       <header class="topbar">
-        <button class="icon-button" aria-label="Menü öffnen">
+        <button class="icon-button nav-toggle" aria-label="Menü öffnen" type="button">
           <span class="icon-lines"></span>
         </button>
         <div class="brand">
-          <span class="brand-title">Teachable Machine</span>
-          <span class="brand-subtitle">Bildklassifikation</span>
+          <span class="brand-title">AI Playground</span>
         </div>
         <div class="mode-picker">
-          <span id="modeLabel" class="mode-label">Bildklassifikation</span>
+          <button id="modeLabel" class="mode-label" type="button" aria-haspopup="true" aria-expanded="false">Bildklassifikation</button>
           <div id="modeMenu" class="mode-menu hidden" role="menu" aria-label="Modus wählen">
             <button data-mode="image" role="menuitem">Bildklassifikation</button>
             <button data-mode="gesture" role="menuitem">Gesture Recognition</button>
@@ -272,6 +271,15 @@
         </section>
       </main>
     </div>
+
+    <div id="sideMenuBackdrop" class="side-menu-backdrop hidden" aria-hidden="true"></div>
+    <nav id="sideMenu" class="side-menu hidden" aria-label="Navigation">
+      <button class="side-menu-close" type="button" aria-label="Menü schließen">×</button>
+      <button class="side-menu-item" type="button" data-nav="home">
+        <span class="side-menu-icon" aria-hidden="true">⌂</span>
+        <span class="side-menu-label">Home</span>
+      </button>
+    </nav>
 
     <!-- Import TensorFlow.js library -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0/dist/tf.min.js" type="text/javascript"></script>

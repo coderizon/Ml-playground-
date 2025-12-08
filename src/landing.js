@@ -1,5 +1,10 @@
 const landingPage = document.getElementById('landing-page');
 const appShell = document.getElementById('app-shell');
+const sideMenu = document.getElementById('sideMenu');
+const sideMenuBackdrop = document.getElementById('sideMenuBackdrop');
+const sideMenuClose = document.querySelector('.side-menu-close');
+const navToggles = document.querySelectorAll('.nav-toggle');
+const navHome = document.querySelector('.side-menu-item[data-nav="home"]');
 
 function startApp(targetMode) {
   if (!appShell || !landingPage) return;
@@ -12,6 +17,14 @@ function startApp(targetMode) {
   landingPage.setAttribute('aria-hidden', 'true');
   appShell.classList.remove('hidden');
   document.body.classList.remove('landing-active');
+}
+
+function showLandingPage() {
+  if (!appShell || !landingPage) return;
+  landingPage.classList.remove('is-hidden');
+  landingPage.removeAttribute('aria-hidden');
+  appShell.classList.add('hidden');
+  document.body.classList.add('landing-active');
 }
 
 if (landingPage) {
@@ -51,6 +64,7 @@ if (landingPage) {
 }
 
 initMarqueeScroller();
+initSideMenu();
 
 function initMarqueeScroller() {
   const marquee = document.querySelector('.model-marquee');
@@ -119,4 +133,51 @@ function initMarqueeScroller() {
   window.addEventListener('pointerup', endDrag);
   window.addEventListener('pointercancel', endDrag);
   window.addEventListener('pointerleave', endDrag);
+}
+
+function initSideMenu() {
+  if (!sideMenu || !sideMenuBackdrop) return;
+
+  const openMenu = () => {
+    sideMenu.classList.remove('hidden');
+    sideMenuBackdrop.classList.remove('hidden');
+    requestAnimationFrame(() => {
+      sideMenu.classList.add('is-open');
+    });
+  };
+
+  const closeMenu = () => {
+    sideMenu.classList.remove('is-open');
+    sideMenuBackdrop.classList.add('hidden');
+    setTimeout(() => {
+      sideMenu.classList.add('hidden');
+    }, 200);
+  };
+
+  navToggles.forEach((toggle) => {
+    toggle.addEventListener('click', () => {
+      openMenu();
+    });
+  });
+
+  if (sideMenuClose) {
+    sideMenuClose.addEventListener('click', closeMenu);
+  }
+
+  sideMenuBackdrop.addEventListener('click', closeMenu);
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeMenu();
+    }
+  });
+
+  if (navHome) {
+    navHome.addEventListener('click', () => {
+      closeMenu();
+      showLandingPage();
+    });
+  }
+
+  window.showLandingPage = showLandingPage;
 }
