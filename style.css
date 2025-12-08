@@ -951,6 +951,7 @@ body.landing-active {
   justify-content: center;
   gap: 1px;
   margin: 6px 0 4px;
+  flex-wrap: nowrap;
 }
 
 .identity-word {
@@ -1186,10 +1187,6 @@ body.landing-active {
     padding: 0px;
   }
 
-  .landing-identity {
-    flex-direction: column;
-  }
-
   .landing-brand {
     font-size: 13px;
   }
@@ -1204,7 +1201,8 @@ body.landing-active {
   }
 
   .search-pill {
-    width: 100%;
+    width: 90vw;
+    max-width: 50%;
     font-size: 16px;
     margin: 0 auto;
   }
