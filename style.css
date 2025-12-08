@@ -1236,7 +1236,7 @@ body.landing-active {
     min-width: 260px;
     max-width: 360px;
     animation-duration: 10s;
-    animation-timing-function: ease-in-out;
+    animation-timing-function: linear;
     animation-iteration-count: infinite;
   }
 
@@ -1255,12 +1255,10 @@ body.landing-active {
 
 @keyframes mobile-drift-left {
   0% { transform: translateX(6px); }
-  50% { transform: translateX(-6px); }
-  100% { transform: translateX(6px); }
+  100% { transform: translateX(-12px); }
 }
 
 @keyframes mobile-drift-right {
   0% { transform: translateX(-6px); }
-  50% { transform: translateX(6px); }
-  100% { transform: translateX(-6px); }
+  100% { transform: translateX(12px); }
 }
