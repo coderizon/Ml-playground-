@@ -18,7 +18,11 @@ import { state } from '../state.js';
 import { lockCapturePanels, updateExampleCounts } from '../ui/classes.js';
 import { renderProbabilities } from '../ui/probabilities.js';
 import { setMobileStep } from '../ui/steps.js';
-import { ensureGestureRecognizer, normalizeGestureLandmarks, runGestureStep } from './gesture.js';
+import {
+  detectGestureLandmarks,
+  normalizeGestureLandmarks,
+  runGestureStep,
+} from './gesture.js';
 import { runFaceStep } from './face.js';
 
 const defaultTrainLabel = TRAIN_BUTTON ? TRAIN_BUTTON.textContent : 'Modell trainieren';
@@ -263,6 +267,9 @@ export function handleCollectEnd(event) {
 
 async function dataGatherLoop() {
   if (state.currentMode === 'face') return;
+  if (!state.videoPlaying && CAPTURE_VIDEO?.readyState >= 2) {
+    state.videoPlaying = true;
+  }
   if (state.videoPlaying && state.gatherDataState !== STOP_DATA_GATHER) {
     if (state.currentMode === 'gesture') {
       await collectGestureExample();
@@ -283,12 +290,13 @@ async function collectGestureExample() {
     ) {
       return;
     }
-    const recognizer = await ensureGestureRecognizer();
-    if (!recognizer) return;
-
-    const result = recognizer.recognizeForVideo(CAPTURE_VIDEO, performance.now());
-    const landmarks = result?.landmarks?.[0];
-    if (!landmarks) return;
+    const landmarks = await detectGestureLandmarks(CAPTURE_VIDEO);
+    if (!landmarks) {
+      if (STATUS) {
+        STATUS.innerText = 'Keine Hand erkannt. Halte die Hand näher vor die Kamera.';
+      }
+      return;
+    }
 
     const featureVector = normalizeGestureLandmarks(landmarks);
     if (!featureVector || featureVector.length !== GESTURE_FEATURE_LENGTH) return;

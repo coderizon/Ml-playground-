@@ -20,10 +20,14 @@ import {
   RESET_BUTTON,
   STATUS,
   TRAIN_BUTTON,
+  bleArduinoCard,
+  bleCalliopeCard,
+  bleConnectButton,
+  bleMicrobitCard,
+  bleModal,
+  bleModalBackdrop,
+  bleModalClose,
   addClassButton,
-  connectArduinoButton,
-  connectMicrobitButton,
-  connectCalliopeButton,
   epochsInput,
   batchSizeInput,
   learningRateInput,
@@ -120,44 +124,7 @@ document.addEventListener('click', (event) => {
   }
 });
 
-setupBluetoothButton({
-  button: connectArduinoButton,
-  stateKey: 'arduinoConnected',
-  setListener: setArduinoConnectionListener,
-  isConnected: isArduinoConnected,
-  connect: connectArduino,
-  labels: {
-    connected: 'Arduino verbunden',
-    disconnected: 'Arduino verbinden',
-    already: 'Arduino ist bereits verbunden.',
-  },
-});
-
-setupBluetoothButton({
-  button: connectMicrobitButton,
-  stateKey: 'microbitConnected',
-  setListener: setMicrobitConnectionListener,
-  isConnected: isMicrobitConnected,
-  connect: connectMicrobit,
-  labels: {
-    connected: 'Micro:bit verbunden',
-    disconnected: 'Micro:bit verbinden',
-    already: 'Micro:bit ist bereits verbunden.',
-  },
-});
-
-setupBluetoothButton({
-  button: connectCalliopeButton,
-  stateKey: 'calliopeConnected',
-  setListener: setCalliopeConnectionListener,
-  isConnected: isCalliopeConnected,
-  connect: connectCalliope,
-  labels: {
-    connected: 'Calliope verbunden',
-    disconnected: 'Calliope verbinden',
-    already: 'Calliope ist bereits verbunden.',
-  },
-});
+initBleModal();
 
 function initHyperparamInputs() {
   bindHyperparamInput(epochsInput, 'trainingEpochs', {
@@ -193,40 +160,96 @@ function bindHyperparamInput(element, stateKey, { fallback, parse, min }) {
   element.addEventListener('blur', applyValue);
 }
 
-function setupBluetoothButton({
-  button,
-  stateKey,
-  setListener,
-  isConnected,
-  connect,
-  labels,
-}) {
+function initBleModal() {
+  if (!bleConnectButton || !bleModal) return;
+
+  const closeModal = () => {
+    bleModal.classList.add('hidden');
+    bleModalBackdrop?.classList.add('hidden');
+    document.body.classList.remove('modal-open');
+  };
+
+  const openModal = () => {
+    bleModal.classList.remove('hidden');
+    bleModalBackdrop?.classList.remove('hidden');
+    document.body.classList.add('modal-open');
+  };
+
+  bleConnectButton.addEventListener('click', openModal);
+  bleModalBackdrop?.addEventListener('click', closeModal);
+  bleModalClose?.addEventListener('click', closeModal);
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !bleModal.classList.contains('hidden')) {
+      closeModal();
+    }
+  });
+
+  const devices = [
+    {
+      button: bleArduinoCard,
+      stateKey: 'arduinoConnected',
+      setListener: setArduinoConnectionListener,
+      isConnected: isArduinoConnected,
+      connect: connectArduino,
+      label: 'Arduino Uno R4',
+    },
+    {
+      button: bleCalliopeCard,
+      stateKey: 'calliopeConnected',
+      setListener: setCalliopeConnectionListener,
+      isConnected: isCalliopeConnected,
+      connect: connectCalliope,
+      label: 'Calliope Mini',
+    },
+    {
+      button: bleMicrobitCard,
+      stateKey: 'microbitConnected',
+      setListener: setMicrobitConnectionListener,
+      isConnected: isMicrobitConnected,
+      connect: connectMicrobit,
+      label: 'Micro:bit',
+    },
+  ];
+
+  devices.forEach((device) => setupBleDeviceCard(device, closeModal));
+}
+
+function setupBleDeviceCard(
+  { button, stateKey, setListener, isConnected, connect, label },
+  closeModal
+) {
   if (!button) return;
+  const statusEl = button.querySelector('.ble-device-status');
+
+  const setStatus = (text) => {
+    if (statusEl) statusEl.textContent = text;
+  };
+
+  const updateState = (connected) => {
+    state[stateKey] = connected;
+    button.classList.toggle('is-connected', connected);
+    button.disabled = connected;
+    setStatus(connected ? `${label} verbunden` : 'Bereit');
+    if (connected) closeModal();
+  };
 
   setListener((connected) => {
-    state[stateKey] = connected;
-    button.disabled = false;
-    button.textContent = connected ? labels.connected : labels.disconnected;
-    button.classList.toggle('primary', connected);
-    button.classList.toggle('ghost', !connected);
+    updateState(connected);
   });
 
   button.addEventListener('click', async () => {
     if (state[stateKey] || isConnected()) {
-      alert(labels.already);
+      updateState(true);
       return;
     }
+    setStatus('Verbinde...');
     button.disabled = true;
-    button.textContent = 'Verbinde...';
     try {
       await connect();
     } catch (error) {
       console.error(error);
-    } finally {
-      if (!state[stateKey]) {
-        button.disabled = false;
-        button.textContent = labels.disconnected;
-      }
+      setStatus('Verbindung fehlgeschlagen');
+      button.disabled = false;
     }
   });
 }

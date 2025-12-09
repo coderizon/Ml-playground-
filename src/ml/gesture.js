@@ -3,34 +3,26 @@ import { GESTURE_OVERLAY, PREVIEW_VIDEO, STATUS } from '../domRefs.js';
 import { state } from '../state.js';
 import { renderProbabilities } from '../ui/probabilities.js';
 
+const oneEuroFilters = [];
+
 export async function ensureGestureRecognizer() {
   if (state.gestureRecognizer) return state.gestureRecognizer;
   if (state.gestureInitPromise) return state.gestureInitPromise;
 
   state.gestureInitPromise = (async () => {
     try {
-      const vision = await import(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0'
+      const handPoseDetection = await loadHandPoseDetectionScript();
+      state.gestureRecognizer = await handPoseDetection.createDetector(
+        handPoseDetection.SupportedModels.MediaPipeHands,
+        {
+          runtime: 'tfjs',
+          modelType: 'lite',
+          maxHands: 1,
+        }
       );
-      const fileset = await vision.FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm'
-      );
-      state.gestureRecognizer = await vision.GestureRecognizer.createFromOptions(fileset, {
-        baseOptions: {
-          modelAssetPath:
-            'https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task',
-          delegate: 'CPU',
-        },
-        runningMode: 'VIDEO',
-        numHands: 1,
-      });
-      if (GESTURE_OVERLAY) {
-        const ctx = GESTURE_OVERLAY.getContext('2d');
-        state.drawingUtils = new vision.DrawingUtils(ctx);
-      }
-      state.gestureConnections = vision.GestureRecognizer.HAND_CONNECTIONS || HAND_CONNECTIONS;
+      state.gestureConnections = HAND_CONNECTIONS;
       if (STATUS) {
-        STATUS.innerText = 'Gesture Recognition bereit.';
+        STATUS.innerText = 'Gesture Recognition bereit (TFJS Hand Pose Detection).';
       }
       return state.gestureRecognizer;
     } catch (err) {
@@ -44,6 +36,63 @@ export async function ensureGestureRecognizer() {
   })();
 
   return state.gestureInitPromise;
+}
+
+async function loadHandPoseDetectionScript() {
+  if (typeof window !== 'undefined' && window.handPoseDetection?.createDetector) {
+    return window.handPoseDetection;
+  }
+
+  const candidates = [
+    'https://cdn.jsdelivr.net/npm/@tensorflow-models/hand-pose-detection@0.0.7/dist/hand-pose-detection.min.js',
+    'https://cdn.jsdelivr.net/npm/@tensorflow-models/hand-pose-detection@0.0.7/dist/hand-pose-detection.js',
+    'https://unpkg.com/@tensorflow-models/hand-pose-detection@0.0.7/dist/hand-pose-detection.min.js',
+  ];
+
+  for (const src of candidates) {
+    /* eslint-disable no-await-in-loop */
+    const loaded = await loadScript(src);
+    if (loaded) {
+      return window.handPoseDetection;
+    }
+  }
+
+  throw new Error('Failed to load Hand Pose Detection script.');
+}
+
+function loadScript(src) {
+  return new Promise((resolve) => {
+    const existing = document.querySelector(`script[data-handpose-src="${src}"]`);
+    if (existing && window.handPoseDetection?.createDetector) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.dataset.handposeSrc = src;
+    script.onload = () => resolve(!!window.handPoseDetection?.createDetector);
+    script.onerror = () => resolve(false);
+    document.head.appendChild(script);
+  });
+}
+
+export async function detectGestureLandmarks(videoEl, { flipHorizontal = true } = {}) {
+  const recognizer = await ensureGestureRecognizer();
+  if (!recognizer || !videoEl) return null;
+  const predictions = await recognizer.estimateHands(videoEl, { flipHorizontal });
+  const hand = predictions?.[0];
+  const rawLandmarks = hand?.keypoints3D ?? hand?.keypoints;
+  if (!rawLandmarks || rawLandmarks.length === 0) return null;
+  const vw = videoEl.videoWidth || 1;
+  const vh = videoEl.videoHeight || 1;
+  const norm = Math.max(vw, vh);
+  const normalized = rawLandmarks.map((pt) => ({
+    x: pt.x / vw,
+    y: pt.y / vh,
+    z: (pt.z ?? 0) / norm,
+  }));
+  return applyOneEuroFilter(normalized);
 }
 
 export function normalizeGestureLandmarks(landmarks = []) {
@@ -91,11 +140,7 @@ export async function runGestureStep() {
   if (!GESTURE_OVERLAY) return;
   state.gestureBusy = true;
   try {
-    const recognizer = await ensureGestureRecognizer();
-    if (!recognizer) return;
-    const nowInMs = performance.now();
-    const result = recognizer.recognizeForVideo(PREVIEW_VIDEO, nowInMs);
-    const landmarks = result?.landmarks?.[0];
+    const landmarks = await detectGestureLandmarks(PREVIEW_VIDEO);
     if (!landmarks) {
       renderProbabilities([], -1, state.classNames);
       clearOverlay();
@@ -194,4 +239,68 @@ export function drawHandOverlay(landmarks = []) {
     ctx.lineWidth = 3;
     ctx.stroke();
   });
+}
+
+function applyOneEuroFilter(landmarks) {
+  const nowSeconds = performance.now() / 1000;
+  ensureFilters(landmarks.length);
+  return landmarks.map((pt, idx) => {
+    const filters = oneEuroFilters[idx];
+    return {
+      x: filters.x.filter(pt.x, nowSeconds),
+      y: filters.y.filter(pt.y, nowSeconds),
+      z: filters.z.filter(pt.z ?? 0, nowSeconds),
+    };
+  });
+}
+
+function ensureFilters(count) {
+  const freq = 60;
+  const minCutoff = 0.004;
+  const beta = 0.7;
+  const dCutoff = 1.0;
+  for (let i = oneEuroFilters.length; i < count; i++) {
+    oneEuroFilters[i] = {
+      x: new OneEuroFilter(freq, minCutoff, beta, dCutoff),
+      y: new OneEuroFilter(freq, minCutoff, beta, dCutoff),
+      z: new OneEuroFilter(freq, minCutoff, beta, dCutoff),
+    };
+  }
+}
+
+class OneEuroFilter {
+  constructor(freq, minCutoff, beta, dCutoff) {
+    this.freq = freq;
+    this.minCutoff = minCutoff;
+    this.beta = beta;
+    this.dCutoff = dCutoff;
+    this.lastTime = null;
+    this.xPrev = null;
+    this.dxPrev = 0;
+  }
+
+  alpha(cutoff, dt) {
+    const tau = 1 / (2 * Math.PI * cutoff);
+    return 1 / (1 + tau / dt);
+  }
+
+  filter(x, t) {
+    if (this.lastTime === null) {
+      this.lastTime = t;
+      this.xPrev = x;
+      return x;
+    }
+    const dt = Math.max(1e-3, t - this.lastTime);
+    this.lastTime = t;
+
+    const dx = (x - this.xPrev) / dt;
+    const alphaD = this.alpha(this.dCutoff, dt);
+    this.dxPrev = this.dxPrev + alphaD * (dx - this.dxPrev);
+
+    const cutoff = this.minCutoff + this.beta * Math.abs(this.dxPrev);
+    const alpha = this.alpha(cutoff, dt);
+    this.xPrev = this.xPrev + alpha * (x - this.xPrev);
+
+    return this.xPrev;
+  }
 }
