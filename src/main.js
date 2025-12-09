@@ -13,11 +13,7 @@ import {
   isCalliopeConnected,
   setCalliopeConnectionListener,
 } from './bluetooth/calliope.js';
-import {
-  GESTURE_LABELS,
-  MODE_NAMES,
-  STOP_DATA_GATHER,
-} from './constants.js';
+import { MODE_NAMES, STOP_DATA_GATHER } from './constants.js';
 import {
   GESTURE_OVERLAY,
   PREVIEW_VIDEO,
@@ -261,38 +257,38 @@ function setMode(newMode) {
   }
   document.body.setAttribute('data-mode', newMode);
 
+  state.predict = false;
+  state.previewReady = false;
+  state.trainingCompleted = false;
+  state.gatherDataState = STOP_DATA_GATHER;
+  state.lastPrediction = [];
+  disposeTrainingData();
+  state.examplesCount.length = 0;
+  resetTrainingProgress();
+  updateExampleCounts(true);
+  unlockCapturePanels();
+  renderProbabilities([], -1, state.classNames);
+  PREVIEW_VIDEO.classList.add('hidden');
+  clearOverlay();
+
   if (newMode === 'gesture') {
-    state.predict = true;
-    state.previewReady = false;
-    state.trainingCompleted = false;
     if (STATUS) {
-      STATUS.innerText = 'Gesture Recognition wird geladen...';
+      STATUS.innerText = 'Gestenmodus aktiv. Sammle Gestenbeispiele und trainiere.';
     }
-    setMobileStep('preview');
-    showPreview();
-    enableCam();
-    renderProbabilities([], -1, GESTURE_LABELS);
     if (GESTURE_OVERLAY) {
       GESTURE_OVERLAY.classList.remove('hidden');
-      clearOverlay();
     }
-    window.requestAnimationFrame(predictLoop);
   } else {
-    state.predict = false;
-    state.previewReady = false;
-    state.trainingCompleted = false;
     if (STATUS) {
       STATUS.innerText = 'Bildklassifikation aktiv. Sammle Daten und trainiere.';
     }
-    PREVIEW_VIDEO.classList.add('hidden');
-    state.lastPrediction = [];
-    renderProbabilities([], -1, state.classNames);
-    clearOverlay();
     if (GESTURE_OVERLAY) {
       GESTURE_OVERLAY.classList.add('hidden');
     }
-    setMobileStep('collect');
   }
+
+  rebuildModel();
+  setMobileStep('collect');
 
   updateModeMenuActive();
 }

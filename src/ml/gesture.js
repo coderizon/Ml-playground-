@@ -1,4 +1,4 @@
-import { GESTURE_LABELS, HAND_CONNECTIONS } from '../constants.js';
+import { GESTURE_FEATURE_LENGTH, HAND_CONNECTIONS } from '../constants.js';
 import { GESTURE_OVERLAY, PREVIEW_VIDEO, STATUS } from '../domRefs.js';
 import { state } from '../state.js';
 import { renderProbabilities } from '../ui/probabilities.js';
@@ -45,6 +45,37 @@ export async function ensureGestureRecognizer() {
   return state.gestureInitPromise;
 }
 
+export function normalizeGestureLandmarks(landmarks = []) {
+  if (!Array.isArray(landmarks) || landmarks.length === 0) return null;
+  const wrist = landmarks[0];
+  if (!wrist) return null;
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  landmarks.forEach((pt) => {
+    if (!pt) return;
+    minX = Math.min(minX, pt.x);
+    minY = Math.min(minY, pt.y);
+    maxX = Math.max(maxX, pt.x);
+    maxY = Math.max(maxY, pt.y);
+  });
+
+  const scale = Math.max(0.0001, Math.max(maxX - minX, maxY - minY)); // avoid div by zero
+  const features = [];
+
+  for (let i = 0; i < GESTURE_FEATURE_LENGTH / 3; i++) {
+    const point = landmarks[i] || wrist;
+    const x = (point?.x ?? wrist.x ?? 0) - wrist.x;
+    const y = (point?.y ?? wrist.y ?? 0) - wrist.y;
+    const z = (point?.z ?? wrist.z ?? 0) - (wrist.z ?? 0);
+    features.push(x / scale, y / scale, z / scale);
+  }
+
+  return features;
+}
+
 export async function runGestureStep() {
   if (state.gestureBusy) return;
   if (!state.previewReady) return;
@@ -55,27 +86,39 @@ export async function runGestureStep() {
     if (!recognizer) return;
     const nowInMs = performance.now();
     const result = recognizer.recognizeForVideo(PREVIEW_VIDEO, nowInMs);
-    if (!result || !result.gestures || !result.gestures.length) {
-      renderProbabilities([], -1, GESTURE_LABELS);
+    const landmarks = result?.landmarks?.[0];
+    if (!landmarks) {
+      renderProbabilities([], -1, state.classNames);
       clearOverlay();
       return;
     }
-    const categories = result.gestures[0] || [];
-    const probs = GESTURE_LABELS.map((name) => {
-      const match = categories.find((c) => c.categoryName === name);
-      return match ? match.score : 0;
-    });
-    const topIndex =
-      probs.length > 0
-        ? probs.reduce((best, val, idx, arr) => (val > arr[best] ? idx : best), 0)
-        : -1;
-    renderProbabilities(probs, topIndex, GESTURE_LABELS);
 
-    if (result.landmarks && result.landmarks.length) {
-      drawHandOverlay(result.landmarks[0]);
-    } else {
-      clearOverlay();
+    drawHandOverlay(landmarks);
+
+    if (!state.trainingCompleted || !state.model) {
+      renderProbabilities([], -1, state.classNames);
+      return;
     }
+
+    const featureVector = normalizeGestureLandmarks(landmarks);
+    if (!featureVector) {
+      renderProbabilities([], -1, state.classNames);
+      return;
+    }
+
+    tf.tidy(() => {
+      const input = tf.tensor2d([featureVector]);
+      const prediction = state.model.predict(input).squeeze();
+      const predictionArray = Array.from(prediction.dataSync());
+      const bestIndex =
+        predictionArray.length > 0
+          ? predictionArray.reduce(
+              (bestIdx, value, idx, arr) => (value > arr[bestIdx] ? idx : bestIdx),
+              0
+            )
+          : -1;
+      renderProbabilities(predictionArray, bestIndex, state.classNames);
+    });
   } catch (err) {
     console.error(err);
   } finally {

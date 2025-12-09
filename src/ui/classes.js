@@ -64,6 +64,18 @@ export function setupClassCard(card, idx, handlers = {}) {
     state.switchCameraButtons[idx] = switchBtn;
   }
 
+  const clearNameOnce = () => {
+    if (nameInput.dataset.cleared === 'true') return;
+    nameInput.dataset.cleared = 'true';
+    nameInput.value = '';
+    state.classNames[idx] = '';
+    collectorBtn.setAttribute('data-name', '');
+    onNameChange(idx, state.classNames[idx]);
+  };
+
+  nameInput.addEventListener('focus', clearNameOnce);
+  nameInput.addEventListener('pointerdown', clearNameOnce);
+
   nameInput.addEventListener('input', () => {
     state.classNames[idx] = nameInput.value || `Class ${idx + 1}`;
     collectorBtn.setAttribute('data-name', state.classNames[idx]);
@@ -110,7 +122,7 @@ function buildClassCardElement(idx) {
       </div>
       <span class="dots">⋮</span>
     </div>
-    <p class="section-label">Bildbeispiele hinzufügen:</p>
+    <p class="section-label">Beispiele hinzufügen:</p>
     <div class="action-row">
       <button class="open-webcam ghost" data-class-index="${idx}">Webcam</button>
     </div>
@@ -123,7 +135,7 @@ function buildClassCardElement(idx) {
         </div>
       </div>
       <div class="count-row">
-        <span class="count-chip" data-count-for="${idx}">0 Bildbeispiele</span>
+        <span class="count-chip" data-count-for="${idx}">0 Beispiele</span>
       </div>
       <div class="capture-slot" data-class-slot="${idx}"></div>
       <button class="dataCollector primary block" data-1hot="${idx}" data-name="Class ${idx + 1}">Zum Aufnehmen halten</button>
@@ -136,7 +148,7 @@ export function updateExampleCounts(reset = false) {
   state.countChips.forEach((chip) => {
     const idx = parseInt(chip.getAttribute('data-count-for'), 10);
     const count = reset ? 0 : state.examplesCount[idx] || 0;
-    chip.textContent = `${count} Bildbeispiele`;
+    chip.textContent = `${count} Beispiele`;
   });
 }
 

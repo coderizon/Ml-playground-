@@ -134,16 +134,6 @@ body {
   color: var(--accent);
 }
 
-body[data-mode="gesture"] .classes-column,
-body[data-mode="gesture"] .training-column,
-body[data-mode="gesture"] .mobile-nav {
-  display: none !important;
-}
-
-body[data-mode="gesture"] .preview-column {
-  display: flex;
-}
-
 .mobile-nav {
   display: flex;
   position: sticky;

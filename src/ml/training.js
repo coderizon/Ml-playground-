@@ -2,6 +2,7 @@ import {
   MOBILE_NET_INPUT_HEIGHT,
   MOBILE_NET_INPUT_WIDTH,
   STOP_DATA_GATHER,
+  GESTURE_FEATURE_LENGTH,
 } from '../constants.js';
 import {
   CAPTURE_VIDEO,
@@ -17,7 +18,7 @@ import { state } from '../state.js';
 import { lockCapturePanels, updateExampleCounts } from '../ui/classes.js';
 import { renderProbabilities } from '../ui/probabilities.js';
 import { setMobileStep } from '../ui/steps.js';
-import { runGestureStep } from './gesture.js';
+import { ensureGestureRecognizer, normalizeGestureLandmarks, runGestureStep } from './gesture.js';
 
 const defaultTrainLabel = TRAIN_BUTTON ? TRAIN_BUTTON.textContent : 'Modell trainieren';
 
@@ -25,7 +26,7 @@ export async function trainAndPredict() {
   if (state.trainingCompleted || state.trainingInProgress) return;
   if (!state.trainingDataInputs.length) {
     if (STATUS) {
-      STATUS.innerText = 'Bitte sammle zuerst Bildbeispiele.';
+      STATUS.innerText = 'Bitte sammle zuerst Beispiele.';
     }
     return;
   }
@@ -239,31 +240,64 @@ export function handleCollectEnd(event) {
   state.gatherDataState = STOP_DATA_GATHER;
 }
 
-function dataGatherLoop() {
+async function dataGatherLoop() {
   if (state.videoPlaying && state.gatherDataState !== STOP_DATA_GATHER) {
-    const imageFeatures = tf.tidy(function () {
-      const videoFrameAsTensor = tf.browser.fromPixels(CAPTURE_VIDEO);
-      const resizedTensorFrame = tf.image.resizeBilinear(
-        videoFrameAsTensor,
-        [MOBILE_NET_INPUT_HEIGHT, MOBILE_NET_INPUT_WIDTH],
-        true
-      );
-      const normalizedTensorFrame = resizedTensorFrame.div(255);
-      return state.mobilenet.predict(normalizedTensorFrame.expandDims()).squeeze();
-    });
-
-    state.trainingDataInputs.push(imageFeatures);
-    state.trainingDataOutputs.push(state.gatherDataState);
-    vibrateFeedback();
-
-    if (state.examplesCount[state.gatherDataState] === undefined) {
-      state.examplesCount[state.gatherDataState] = 0;
+    if (state.currentMode === 'gesture') {
+      await collectGestureExample();
+    } else {
+      collectImageExample();
     }
-    state.examplesCount[state.gatherDataState]++;
-
-    updateExampleCounts();
     window.requestAnimationFrame(dataGatherLoop);
   }
+}
+
+async function collectGestureExample() {
+  try {
+    const recognizer = await ensureGestureRecognizer();
+    if (!recognizer) return;
+
+    const result = recognizer.recognizeForVideo(CAPTURE_VIDEO, performance.now());
+    const landmarks = result?.landmarks?.[0];
+    if (!landmarks) return;
+
+    const featureVector = normalizeGestureLandmarks(landmarks);
+    if (!featureVector || featureVector.length !== GESTURE_FEATURE_LENGTH) return;
+
+    const featuresTensor = tf.tensor1d(featureVector);
+    state.trainingDataInputs.push(featuresTensor);
+    state.trainingDataOutputs.push(state.gatherDataState);
+    handleExampleBookkeeping();
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function collectImageExample() {
+  const imageFeatures = tf.tidy(function () {
+    const videoFrameAsTensor = tf.browser.fromPixels(CAPTURE_VIDEO);
+    const resizedTensorFrame = tf.image.resizeBilinear(
+      videoFrameAsTensor,
+      [MOBILE_NET_INPUT_HEIGHT, MOBILE_NET_INPUT_WIDTH],
+      true
+    );
+    const normalizedTensorFrame = resizedTensorFrame.div(255);
+    return state.mobilenet.predict(normalizedTensorFrame.expandDims()).squeeze();
+  });
+
+  state.trainingDataInputs.push(imageFeatures);
+  state.trainingDataOutputs.push(state.gatherDataState);
+  handleExampleBookkeeping();
+}
+
+function handleExampleBookkeeping() {
+  vibrateFeedback();
+
+  if (state.examplesCount[state.gatherDataState] === undefined) {
+    state.examplesCount[state.gatherDataState] = 0;
+  }
+  state.examplesCount[state.gatherDataState]++;
+
+  updateExampleCounts();
 }
 
 function vibrateFeedback() {

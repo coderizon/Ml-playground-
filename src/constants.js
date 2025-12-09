@@ -3,6 +3,7 @@ export const MOBILE_NET_INPUT_HEIGHT = 224;
 export const STOP_DATA_GATHER = -1;
 export const ARDUINO_SEND_THRESHOLD = 0.6;
 export const ARDUINO_SEND_COOLDOWN_MS = 500;
+export const GESTURE_FEATURE_LENGTH = 63; // 21 Landmarks * (x,y,z)
 
 export const BAR_COLORS = [
   ['#f07818', '#ffd8ba'],
