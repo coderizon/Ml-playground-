@@ -70,6 +70,7 @@ const classCardHandlers = {
 
 TRAIN_BUTTON.addEventListener('click', trainAndPredict);
 RESET_BUTTON.addEventListener('click', resetApp);
+const defaultTrainLabel = TRAIN_BUTTON ? TRAIN_BUTTON.textContent : 'Modell trainieren';
 
 mobileStepButtons.forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -246,7 +247,7 @@ function addClassAndReset() {
 }
 
 function setMode(newMode) {
-  if (newMode !== 'image' && newMode !== 'gesture') return;
+  if (newMode !== 'image' && newMode !== 'gesture' && newMode !== 'face') return;
   if (newMode === state.currentMode) {
     updateModeMenuActive();
     return;
@@ -267,17 +268,41 @@ function setMode(newMode) {
   resetTrainingProgress();
   updateExampleCounts(true);
   unlockCapturePanels();
-  renderProbabilities([], -1, state.classNames);
+  renderProbabilities([], -1, newMode === 'face' ? [] : state.classNames);
   PREVIEW_VIDEO.classList.add('hidden');
   clearOverlay();
+  toggleCaptureControls(true);
+  setTrainButtonState(true);
 
   if (newMode === 'gesture') {
+    if (GESTURE_OVERLAY) {
+      GESTURE_OVERLAY.classList.remove('hidden');
+      clearOverlay();
+    }
+    setMobileStep('preview');
+    showPreview();
+    enableCam();
     if (STATUS) {
       STATUS.innerText = 'Gestenmodus aktiv. Sammle Gestenbeispiele und trainiere.';
     }
+    state.predict = true;
+    window.requestAnimationFrame(predictLoop);
+  } else if (newMode === 'face') {
+    renderProbabilities([], -1, []);
     if (GESTURE_OVERLAY) {
       GESTURE_OVERLAY.classList.remove('hidden');
+      clearOverlay();
     }
+    setMobileStep('preview');
+    showPreview();
+    enableCam();
+    if (STATUS) {
+      STATUS.innerText = 'Face Landmarker aktiv (nur Inferenz).';
+    }
+    toggleCaptureControls(false);
+    setTrainButtonState(false, 'Nur Inferenz');
+    state.predict = true;
+    window.requestAnimationFrame(predictLoop);
   } else {
     if (STATUS) {
       STATUS.innerText = 'Bildklassifikation aktiv. Sammle Daten und trainiere.';
@@ -285,10 +310,15 @@ function setMode(newMode) {
     if (GESTURE_OVERLAY) {
       GESTURE_OVERLAY.classList.add('hidden');
     }
+    setMobileStep('collect');
   }
 
-  rebuildModel();
-  setMobileStep('collect');
+  if (newMode !== 'face') {
+    rebuildModel();
+  } else if (state.model) {
+    state.model.dispose();
+    state.model = null;
+  }
 
   updateModeMenuActive();
 }
@@ -306,13 +336,38 @@ function resetApp() {
   }
   PREVIEW_VIDEO.classList.add('hidden');
   unlockCapturePanels();
-  rebuildModel();
+  if (state.currentMode !== 'face') {
+    rebuildModel();
+    setTrainButtonState(true);
+    toggleCaptureControls(true);
+  } else {
+    setTrainButtonState(false, 'Nur Inferenz');
+    toggleCaptureControls(false);
+    if (GESTURE_OVERLAY) {
+      GESTURE_OVERLAY.classList.remove('hidden');
+    }
+  }
   updateExampleCounts(true);
   state.lastPrediction = [];
-  renderProbabilities([], -1, state.classNames);
-  setMobileStep('collect');
+  renderProbabilities([], -1, state.currentMode === 'face' ? [] : state.classNames);
+  setMobileStep(state.currentMode === 'face' ? 'preview' : 'collect');
 
   console.log('Tensors in memory: ' + tf.memory().numTensors);
 }
 
 window.setAppMode = setMode;
+
+function toggleCaptureControls(enabled) {
+  state.openWebcamButtons.forEach((btn) => {
+    if (btn) btn.disabled = !enabled;
+  });
+  state.dataCollectorButtons.forEach((btn) => {
+    if (btn) btn.disabled = !enabled;
+  });
+}
+
+function setTrainButtonState(enabled, label = defaultTrainLabel) {
+  if (!TRAIN_BUTTON) return;
+  TRAIN_BUTTON.disabled = !enabled;
+  TRAIN_BUTTON.textContent = label;
+}

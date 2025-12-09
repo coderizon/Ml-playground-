@@ -19,10 +19,17 @@ import { lockCapturePanels, updateExampleCounts } from '../ui/classes.js';
 import { renderProbabilities } from '../ui/probabilities.js';
 import { setMobileStep } from '../ui/steps.js';
 import { ensureGestureRecognizer, normalizeGestureLandmarks, runGestureStep } from './gesture.js';
+import { runFaceStep } from './face.js';
 
 const defaultTrainLabel = TRAIN_BUTTON ? TRAIN_BUTTON.textContent : 'Modell trainieren';
 
 export async function trainAndPredict() {
+  if (state.currentMode === 'face') {
+    if (STATUS) {
+      STATUS.innerText = 'Face Landmarker ist reines Inferenz-Modell.';
+    }
+    return;
+  }
   if (state.trainingCompleted || state.trainingInProgress) return;
   if (!state.trainingDataInputs.length) {
     if (STATUS) {
@@ -201,6 +208,11 @@ export function predictLoop() {
     window.requestAnimationFrame(predictLoop);
     return;
   }
+  if (state.currentMode === 'face') {
+    runFaceStep();
+    window.requestAnimationFrame(predictLoop);
+    return;
+  }
 
   if (state.previewReady && state.trainingCompleted) {
     tf.tidy(function () {
@@ -229,6 +241,7 @@ export function predictLoop() {
 }
 
 export function handleCollectStart(event) {
+  if (state.currentMode === 'face') return;
   event.preventDefault();
   const classNumber = parseInt(event.currentTarget.getAttribute('data-1hot'), 10);
   state.gatherDataState = classNumber;
@@ -241,6 +254,7 @@ export function handleCollectEnd(event) {
 }
 
 async function dataGatherLoop() {
+  if (state.currentMode === 'face') return;
   if (state.videoPlaying && state.gatherDataState !== STOP_DATA_GATHER) {
     if (state.currentMode === 'gesture') {
       await collectGestureExample();

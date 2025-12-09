@@ -134,6 +134,21 @@ body {
   color: var(--accent);
 }
 
+.hero-placeholder {
+  font-weight: 700;
+  color: #1f2937;
+}
+
+body[data-mode="face"] .classes-column,
+body[data-mode="face"] .training-column,
+body[data-mode="face"] .mobile-nav {
+  display: none !important;
+}
+
+body[data-mode="face"] .preview-column {
+  display: flex;
+}
+
 .mobile-nav {
   display: flex;
   position: sticky;
