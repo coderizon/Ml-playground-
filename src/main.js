@@ -279,7 +279,7 @@ function setMode(newMode) {
       GESTURE_OVERLAY.classList.remove('hidden');
       clearOverlay();
     }
-    setMobileStep('preview');
+    setMobileStep('collect');
     showPreview();
     enableCam();
     if (STATUS) {
@@ -297,7 +297,7 @@ function setMode(newMode) {
     showPreview();
     enableCam();
     if (STATUS) {
-      STATUS.innerText = 'Face Landmarker aktiv (nur Inferenz).';
+      STATUS.innerText = 'Gesichtsmerkmale aktiv (nur Inferenz).';
     }
     toggleCaptureControls(false);
     setTrainButtonState(false, 'Nur Inferenz');

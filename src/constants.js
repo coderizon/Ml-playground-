@@ -52,6 +52,6 @@ export const HAND_CONNECTIONS = [
 
 export const MODE_NAMES = {
   image: 'Bildklassifikation',
-  gesture: 'Gesture Recognition',
-  face: 'Gesichts-Landmarker',
+  gesture: 'Gestenerkennung',
+  face: 'Gesichtsmerkmale',
 };
