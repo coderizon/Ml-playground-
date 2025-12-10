@@ -17,19 +17,21 @@ import { state } from '../state.js';
 import { lockCapturePanels, updateExampleCounts } from '../ui/classes.js';
 import { renderProbabilities } from '../ui/probabilities.js';
 import { setMobileStep } from '../ui/steps.js';
-import { runFaceStep } from './face.js';
-import { collectGestureSample, predictGesture, trainGestureModel } from './gesture.js';
+
+import { predictGesture, trainGestureModel } from './gesture.js';
 
 const defaultTrainLabel = TRAIN_BUTTON ? TRAIN_BUTTON.textContent : 'Modell trainieren';
 
 export async function trainAndPredict() {
+
+  if (state.trainingCompleted || state.trainingInProgress) return;
+
   if (state.currentMode === 'face') {
     if (STATUS) {
-      STATUS.innerText = 'Face Landmarker ist reines Inferenz-Modell.';
+      STATUS.innerText = 'Gesichtserkennung läuft ohne Training.';
     }
     return;
   }
-  if (state.trainingCompleted || state.trainingInProgress) return;
 
   if (state.currentMode === 'gesture') {
     await trainGestureWorkflow();
@@ -257,11 +259,7 @@ export function showPreview() {
 export async function predictLoop() {
   if (!state.predict) return;
 
-  if (state.currentMode === 'face') {
-    runFaceStep();
-    window.requestAnimationFrame(predictLoop);
-    return;
-  }
+
 
   if (state.currentMode === 'gesture') {
     if (state.previewReady && state.trainingCompleted) {
@@ -308,7 +306,6 @@ export async function predictLoop() {
 
 export function handleCollectStart(event) {
   console.log('[Debug] handleCollectStart triggered.');
-  if (state.currentMode === 'face') return;
   event.preventDefault();
   const classNumber = parseInt(event.currentTarget.getAttribute('data-1hot'), 10);
   state.gatherDataState = classNumber;
@@ -322,17 +319,14 @@ export function handleCollectEnd(event) {
 }
 
 async function dataGatherLoop() {
+  if (state.currentMode !== 'image') return;
   console.log('[Debug] dataGatherLoop frame. State:', state.gatherDataState);
-  if (state.currentMode === 'face') return;
+
   if (!state.videoPlaying && CAPTURE_VIDEO?.readyState >= 2) {
     state.videoPlaying = true;
   }
   if (state.videoPlaying && state.gatherDataState !== STOP_DATA_GATHER) {
-    if (state.currentMode === 'gesture') {
-      await collectGestureExample();
-    } else {
-      collectImageExample();
-    }
+    collectImageExample();
     window.requestAnimationFrame(dataGatherLoop);
   }
 }
@@ -352,13 +346,6 @@ function collectImageExample() {
   state.trainingDataInputs.push(imageFeatures);
   state.trainingDataOutputs.push(state.gatherDataState);
   handleExampleBookkeeping();
-}
-
-async function collectGestureExample() {
-  const success = await collectGestureSample(state.gatherDataState);
-  if (success) {
-    handleExampleBookkeeping();
-  }
 }
 
 function handleExampleBookkeeping() {

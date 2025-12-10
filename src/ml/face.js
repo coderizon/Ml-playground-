@@ -77,6 +77,8 @@ const BLENDSHAPE_TOP10_WHITELIST = new Set([
   'mouthFrownRight',
 ]);
 
+let faceLoopHandle = null;
+
 function translateBlendshape(name) {
   if (!name) return '';
   return BLENDSHAPE_LABELS_DE[name] || name;
@@ -123,6 +125,30 @@ export async function ensureFaceLandmarker() {
   })();
 
   return state.faceInitPromise;
+}
+
+export function runFaceLoop() {
+  if (faceLoopHandle || state.currentMode !== 'face') return;
+
+  const loop = async () => {
+    if (state.currentMode !== 'face') {
+      stopFaceLoop();
+      return;
+    }
+    faceLoopHandle = window.requestAnimationFrame(loop);
+    await runFaceStep();
+  };
+
+  faceLoopHandle = window.requestAnimationFrame(loop);
+}
+
+export function stopFaceLoop() {
+  if (faceLoopHandle) {
+    window.cancelAnimationFrame(faceLoopHandle);
+    faceLoopHandle = null;
+  }
+  clearOverlay();
+  renderProbabilities([], -1, []);
 }
 
 export async function runFaceStep() {

@@ -2,6 +2,9 @@ import { STOP_DATA_GATHER } from '../constants.js';
 import { state } from '../state.js';
 import { CAPTURE_VIDEO, PREVIEW_VIDEO, STATUS } from '../domRefs.js';
 
+export const captureCanvas = document.createElement('canvas');
+captureCanvas.className = 'overlay-canvas';
+
 export function hasGetUserMedia() {
   return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 }
@@ -75,9 +78,15 @@ export function moveCaptureToSlot(idx) {
   const slot = state.captureSlots.find(
     (s) => parseInt(s.getAttribute('data-class-slot'), 10) === idx
   );
-  if (slot && CAPTURE_VIDEO.parentElement !== slot) {
+  if (!slot) return;
+
+  if (CAPTURE_VIDEO.parentElement !== slot) {
     slot.innerHTML = '';
     slot.appendChild(CAPTURE_VIDEO);
+  }
+
+  if (captureCanvas.parentElement !== slot) {
+    slot.appendChild(captureCanvas);
   }
 }
 

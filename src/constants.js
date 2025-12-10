@@ -16,5 +16,6 @@ export const BAR_COLORS = [
 export const MODE_NAMES = {
   image: 'Bildklassifikation',
   gesture: 'Gestenerkennung',
-  face: 'Gesichtsmerkmale',
+  face: 'Gesichtserkennung',
+
 };

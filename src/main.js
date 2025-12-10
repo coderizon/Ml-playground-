@@ -36,7 +36,8 @@ import {
   mobileStepButtons,
 } from './domRefs.js';
 import { clearOverlay } from './ml/overlay.js';
-import { ensureHandLandmarker } from './ml/gesture.js';
+import { ensureHandLandmarker, runGestureLoop, stopGestureLoop } from './ml/gesture.js';
+import { ensureFaceLandmarker, runFaceLoop, stopFaceLoop } from './ml/face.js';
 import { loadMobileNetFeatureModel, rebuildModel } from './ml/model.js';
 import {
   handleCollectEnd,
@@ -276,13 +277,15 @@ function addClassAndReset() {
   updateSwitchButtonsLabel();
 }
 
-function setMode(newMode) {
+async function setMode(newMode) {
   const supportedModes = ['image', 'gesture', 'face'];
   if (!supportedModes.includes(newMode)) return;
   if (newMode === state.currentMode) {
     updateModeMenuActive();
     return;
   }
+  stopGestureLoop();
+  stopFaceLoop();
   state.currentMode = newMode;
   if (modeLabel) {
     modeLabel.textContent = MODE_NAMES[newMode] || newMode;
@@ -299,46 +302,49 @@ function setMode(newMode) {
   resetTrainingProgress();
   updateExampleCounts(true);
   unlockCapturePanels();
-  renderProbabilities([], -1, newMode === 'face' ? [] : state.classNames);
+  const clearedNames = newMode === 'face' ? [] : state.classNames;
+  renderProbabilities([], -1, clearedNames);
   PREVIEW_VIDEO.classList.add('hidden');
   clearOverlay();
   toggleCaptureControls(true);
   setTrainButtonState(true);
 
-  if (newMode === 'face') {
-    renderProbabilities([], -1, []);
-    if (GESTURE_OVERLAY) {
-      GESTURE_OVERLAY.classList.remove('hidden');
-      clearOverlay();
-    }
-    setMobileStep('preview');
-    showPreview();
-    enableCam();
-    if (STATUS) {
-      STATUS.innerText = 'Gesichtsmerkmale aktiv (nur Inferenz).';
-    }
-    toggleCaptureControls(false);
-    setTrainButtonState(false, 'Nur Inferenz');
-    state.predict = true;
-    if (state.model) {
-      state.model.dispose();
-      state.model = null;
-    }
-    window.requestAnimationFrame(predictLoop);
-  } else if (newMode === 'gesture') {
+  if (newMode === 'gesture') {
     if (GESTURE_OVERLAY) {
       GESTURE_OVERLAY.classList.remove('hidden');
       clearOverlay();
     }
     setMobileStep('collect');
     enableCam();
-    ensureHandLandmarker();
-    if (STATUS) {
-      STATUS.innerText = 'Gestenerkennung aktiv. Sammle Daten und trainiere.';
+    const landmarker = await ensureHandLandmarker();
+    if (state.currentMode === 'gesture' && landmarker) {
+      runGestureLoop();
     }
-    if (state.model) {
-      state.model.dispose();
-      state.model = null;
+    if (state.currentMode === 'gesture') {
+      if (STATUS) {
+        STATUS.innerText = 'Gestenerkennung aktiv. Sammle Daten und trainiere.';
+      }
+      if (state.model) {
+        state.model.dispose();
+        state.model = null;
+      }
+    }
+  } else if (newMode === 'face') {
+    if (GESTURE_OVERLAY) {
+      GESTURE_OVERLAY.classList.remove('hidden');
+      clearOverlay();
+    }
+    setMobileStep('preview');
+    enableCam();
+    preparePreviewForFace();
+    const landmarker = await ensureFaceLandmarker();
+    if (state.currentMode === 'face' && landmarker) {
+      state.predict = true;
+      renderProbabilities([], -1, []);
+      runFaceLoop();
+      if (STATUS) {
+        STATUS.innerText = 'Gesichtserkennung aktiv. Vorschau läuft.';
+      }
     }
   } else {
     if (STATUS) {
@@ -385,17 +391,28 @@ function resetApp() {
       GESTURE_OVERLAY.classList.remove('hidden');
       clearOverlay();
     }
-  } else {
-    setTrainButtonState(false, 'Nur Inferenz');
-    toggleCaptureControls(false);
+  } else if (state.currentMode === 'face') {
     if (GESTURE_OVERLAY) {
       GESTURE_OVERLAY.classList.remove('hidden');
+      clearOverlay();
+    }
+    PREVIEW_VIDEO.classList.remove('hidden');
+    state.predict = true;
+    preparePreviewForFace();
+    runFaceLoop();
+    if (STATUS) {
+      STATUS.innerText = 'Gesichtserkennung aktiv.';
     }
   }
   updateExampleCounts(true);
   state.lastPrediction = [];
-  renderProbabilities([], -1, state.currentMode === 'face' ? [] : state.classNames);
-  setMobileStep(state.currentMode === 'face' ? 'preview' : 'collect');
+  if (state.currentMode === 'face') {
+    renderProbabilities([], -1, []);
+    setMobileStep('preview');
+  } else {
+    renderProbabilities([], -1, state.classNames);
+    setMobileStep('collect');
+  }
 
   console.log('Tensors in memory: ' + tf.memory().numTensors);
 }
@@ -415,4 +432,29 @@ function setTrainButtonState(enabled, label = defaultTrainLabel) {
   if (!TRAIN_BUTTON) return;
   TRAIN_BUTTON.disabled = !enabled;
   TRAIN_BUTTON.textContent = label;
+}
+
+function preparePreviewForFace() {
+  if (!PREVIEW_VIDEO) return;
+  PREVIEW_VIDEO.classList.remove('hidden');
+  const hasFrame = () =>
+    PREVIEW_VIDEO.readyState >= 2 &&
+    PREVIEW_VIDEO.videoWidth > 0 &&
+    PREVIEW_VIDEO.videoHeight > 0;
+
+  const markReady = () => {
+    if (!hasFrame()) return;
+    state.previewReady = true;
+    PREVIEW_VIDEO.removeEventListener('loadeddata', markReady);
+    PREVIEW_VIDEO.removeEventListener('canplay', markReady);
+    PREVIEW_VIDEO.removeEventListener('playing', markReady);
+  };
+
+  if (hasFrame()) {
+    markReady();
+  } else {
+    PREVIEW_VIDEO.addEventListener('loadeddata', markReady);
+    PREVIEW_VIDEO.addEventListener('canplay', markReady);
+    PREVIEW_VIDEO.addEventListener('playing', markReady);
+  }
 }

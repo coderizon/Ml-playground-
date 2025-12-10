@@ -1,12 +1,17 @@
 import { CAPTURE_VIDEO, GESTURE_OVERLAY, PREVIEW_VIDEO, STATUS } from '../domRefs.js';
+import { captureCanvas } from '../camera/webcam.js';
+import { STOP_DATA_GATHER } from '../constants.js';
 import { state } from '../state.js';
 import { clearOverlay, resizeOverlay } from './overlay.js';
+import { updateExampleCounts } from '../ui/classes.js';
 
 const HAND_MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 const MP_VERSION = '0.10.8';
 const FEATURE_SIZE = 63; // 21 Landmark-Punkte * 3 (x, y, z)
 const SAMPLE_INTERVAL_MS = 120;
+let gestureLoopHandle = null;
+let captureDrawingUtils = null;
 
 export function resetGestureSamples() {
   state.gestureSamples.length = 0;
@@ -40,6 +45,10 @@ export async function ensureHandLandmarker() {
         const ctx = GESTURE_OVERLAY.getContext('2d');
         state.handDrawingUtils = ctx ? new vision.DrawingUtils(ctx) : null;
       }
+      if (captureCanvas) {
+        const captureCtx = captureCanvas.getContext('2d');
+        captureDrawingUtils = captureCtx ? new vision.DrawingUtils(captureCtx) : null;
+      }
 
       if (STATUS) {
         STATUS.innerText = 'Hand Landmarker bereit.';
@@ -60,19 +69,83 @@ export async function ensureHandLandmarker() {
   return state.handInitPromise;
 }
 
-export async function collectGestureSample(labelId) {
-  const detection = await detectHandLandmarks(CAPTURE_VIDEO);
-  if (!detection || detection.vector.length !== FEATURE_SIZE) return false;
+function drawSkeletonOnCanvas(landmarks) {
+  if (!captureCanvas) return;
+  const ctx = captureCanvas.getContext('2d');
+  if (!ctx) return;
 
-  const now = performance.now();
-  if (now - state.gestureLastSampleTs < SAMPLE_INTERVAL_MS) return false;
+  const width = CAPTURE_VIDEO?.videoWidth || captureCanvas.width;
+  const height = CAPTURE_VIDEO?.videoHeight || captureCanvas.height;
 
-  state.gestureSamples.push({
-    landmarks: detection.vector,
-    labelId,
+  if (width && height) {
+    captureCanvas.width = width;
+    captureCanvas.height = height;
+  }
+
+  ctx.clearRect(0, 0, captureCanvas.width || width || 0, captureCanvas.height || height || 0);
+
+  if (!landmarks || !landmarks.length) return;
+
+  const HandLandmarker = state.handVision?.HandLandmarker;
+  if (!HandLandmarker || !state.handVision) return;
+
+  if (!captureDrawingUtils) {
+    captureDrawingUtils = new state.handVision.DrawingUtils(ctx);
+  }
+
+  captureDrawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, {
+    color: '#55c3ff',
+    lineWidth: 3,
   });
-  state.gestureLastSampleTs = now;
-  return true;
+  captureDrawingUtils.drawLandmarks(landmarks, {
+    color: '#0066ff',
+    lineWidth: 2,
+  });
+}
+
+export function runGestureLoop() {
+  if (gestureLoopHandle || state.currentMode !== 'gesture') return;
+
+  const loop = async () => {
+    if (state.currentMode !== 'gesture') {
+      stopGestureLoop();
+      return;
+    }
+
+    gestureLoopHandle = window.requestAnimationFrame(loop);
+
+    const detection = await detectHandLandmarks(CAPTURE_VIDEO);
+    drawSkeletonOnCanvas(detection?.landmarks ?? null);
+
+    if (!detection || detection.vector.length !== FEATURE_SIZE) return;
+    if (state.gatherDataState === STOP_DATA_GATHER) return;
+
+    const now = performance.now();
+    if (now - state.gestureLastSampleTs < SAMPLE_INTERVAL_MS) return;
+
+    state.gestureSamples.push({
+      landmarks: detection.vector,
+      labelId: state.gatherDataState,
+    });
+    state.gestureLastSampleTs = now;
+
+    if (state.examplesCount[state.gatherDataState] === undefined) {
+      state.examplesCount[state.gatherDataState] = 0;
+    }
+    state.examplesCount[state.gatherDataState]++;
+    updateExampleCounts();
+  };
+
+  gestureLoopHandle = window.requestAnimationFrame(loop);
+}
+
+export function stopGestureLoop() {
+  if (gestureLoopHandle) {
+    window.cancelAnimationFrame(gestureLoopHandle);
+    gestureLoopHandle = null;
+  }
+  state.gestureLastSampleTs = 0;
+  drawSkeletonOnCanvas(null);
 }
 
 export async function predictGesture() {
