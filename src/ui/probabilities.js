@@ -4,19 +4,22 @@ import {
   BAR_COLORS,
 } from '../constants.js';
 import { probabilityList } from '../domRefs.js';
-import { state } from '../state.js';
+import { getState, mutateState } from '../state.js';
 import { sendToArduino, isArduinoConnected } from '../bluetooth/arduino.js';
 
 export function renderProbabilities(
-  probArray = state.lastPrediction,
+  probArray = getState().lastPrediction,
   bestIndex = -1,
-  names = state.classNames
+  names = getState().classNames
 ) {
+  const state = getState();
   const safeValues = names.map((_, idx) => {
     if (probArray && probArray[idx] !== undefined) return probArray[idx];
     return 0;
   });
-  state.lastPrediction = safeValues;
+  mutateState((draft) => {
+    draft.lastPrediction = safeValues;
+  });
 
   if (state.predict && bestIndex >= 0) {
     maybeSendArduinoPrediction(safeValues, bestIndex, names);
@@ -64,6 +67,7 @@ export function renderProbabilities(
 }
 
 function maybeSendArduinoPrediction(probArray, bestIndex, names) {
+  const state = getState();
   if (!state.arduinoConnected || !isArduinoConnected() || state.currentMode !== 'image') return;
   if (!Array.isArray(probArray) || bestIndex < 0) return;
 
@@ -74,8 +78,10 @@ function maybeSendArduinoPrediction(probArray, bestIndex, names) {
   const now = Date.now();
   if (label === state.lastSentLabel && now - state.lastSentAt < ARDUINO_SEND_COOLDOWN_MS) return;
 
-  state.lastSentLabel = label;
-  state.lastSentAt = now;
+  mutateState((draft) => {
+    draft.lastSentLabel = label;
+    draft.lastSentAt = now;
+  });
   sendToArduino(`${label}:${Math.round(probability * 100)}`);
 }
 

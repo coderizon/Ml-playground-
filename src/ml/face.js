@@ -1,5 +1,5 @@
 import { GESTURE_OVERLAY, PREVIEW_VIDEO, STATUS } from '../domRefs.js';
-import { state } from '../state.js';
+import { getState, mutateState } from '../state.js';
 import { clearOverlay, resizeOverlay } from './overlay.js';
 import { renderProbabilities } from '../ui/probabilities.js';
 
@@ -78,6 +78,7 @@ const BLENDSHAPE_TOP10_WHITELIST = new Set([
 ]);
 
 let faceLoopHandle = null;
+const state = getState();
 
 function translateBlendshape(name) {
   if (!name) return '';
@@ -88,12 +89,13 @@ export async function ensureFaceLandmarker() {
   if (state.faceLandmarker) return state.faceLandmarker;
   if (state.faceInitPromise) return state.faceInitPromise;
 
-  state.faceInitPromise = (async () => {
-    try {
-      const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3');
-      const fileset = await vision.FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm'
-      );
+  mutateState((draft) => {
+    draft.faceInitPromise = (async () => {
+      try {
+        const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3');
+        const fileset = await vision.FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm'
+        );
       const landmarker = await vision.FaceLandmarker.createFromOptions(fileset, {
         baseOptions: {
           modelAssetPath:
@@ -104,11 +106,15 @@ export async function ensureFaceLandmarker() {
         outputFaceBlendshapes: true,
         numFaces: 1,
       });
-      state.faceLandmarker = landmarker;
-      state.faceVision = vision;
+      mutateState((innerDraft) => {
+        innerDraft.faceLandmarker = landmarker;
+        innerDraft.faceVision = vision;
+      });
       if (GESTURE_OVERLAY) {
         const ctx = GESTURE_OVERLAY.getContext('2d');
-        state.faceDrawingUtils = new vision.DrawingUtils(ctx);
+        mutateState((innerDraft) => {
+          innerDraft.faceDrawingUtils = new vision.DrawingUtils(ctx);
+        });
       }
       if (STATUS) {
         STATUS.innerText = 'Face Landmarker bereit.';
@@ -116,13 +122,16 @@ export async function ensureFaceLandmarker() {
       return landmarker;
     } catch (err) {
       console.error(err);
-      state.faceLandmarker = null;
+      mutateState((innerDraft) => {
+        innerDraft.faceLandmarker = null;
+      });
       if (STATUS) {
         STATUS.innerText = 'Face Landmarker konnte nicht geladen werden.';
       }
       return null;
     }
-  })();
+    })();
+  });
 
   return state.faceInitPromise;
 }
@@ -163,7 +172,9 @@ export async function runFaceStep() {
   ) {
     return;
   }
-  state.faceBusy = true;
+  mutateState((draft) => {
+    draft.faceBusy = true;
+  });
   try {
     const landmarker = await ensureFaceLandmarker();
     if (!landmarker) return;
@@ -201,7 +212,9 @@ export async function runFaceStep() {
   } catch (err) {
     console.error(err);
   } finally {
-    state.faceBusy = false;
+    mutateState((draft) => {
+      draft.faceBusy = false;
+    });
   }
 }
 

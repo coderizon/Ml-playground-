@@ -1,27 +1,29 @@
 import { CAPTURE_VIDEO, GESTURE_OVERLAY, PREVIEW_VIDEO, STATUS } from '../domRefs.js';
 import { captureCanvas } from '../camera/webcam.js';
-import { STOP_DATA_GATHER } from '../constants.js';
-import { state } from '../state.js';
+import { GESTURE_FEATURE_SIZE, GESTURE_SAMPLE_INTERVAL_MS, STOP_DATA_GATHER } from '../constants.js';
+import { getState, mutateState } from '../state.js';
 import { clearOverlay, resizeOverlay } from './overlay.js';
 import { updateExampleCounts } from '../ui/classes.js';
 
 const HAND_MODEL_URL =
   'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 const MP_VERSION = '0.10.8';
-const FEATURE_SIZE = 63; // 21 Landmark-Punkte * 3 (x, y, z)
-const SAMPLE_INTERVAL_MS = 120;
 let gestureLoopHandle = null;
 let captureDrawingUtils = null;
+const state = getState();
 
 export function resetGestureSamples() {
-  state.gestureSamples.length = 0;
+  mutateState((draft) => {
+    draft.gestureSamples.length = 0;
+  });
 }
 
 export async function ensureHandLandmarker() {
   if (state.handLandmarker) return state.handLandmarker;
   if (state.handInitPromise) return state.handInitPromise;
 
-  state.handInitPromise = (async () => {
+  mutateState((draft) => {
+    draft.handInitPromise = (async () => {
     try {
       const vision = await import(
         `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}`
@@ -38,12 +40,16 @@ export async function ensureHandLandmarker() {
         runningMode: 'VIDEO',
       });
 
-      state.handVision = vision;
-      state.handLandmarker = landmarker;
+      mutateState((draft) => {
+        draft.handVision = vision;
+        draft.handLandmarker = landmarker;
+      });
 
       if (GESTURE_OVERLAY) {
         const ctx = GESTURE_OVERLAY.getContext('2d');
-        state.handDrawingUtils = ctx ? new vision.DrawingUtils(ctx) : null;
+        mutateState((draft) => {
+          draft.handDrawingUtils = ctx ? new vision.DrawingUtils(ctx) : null;
+        });
       }
       if (captureCanvas) {
         const captureCtx = captureCanvas.getContext('2d');
@@ -57,14 +63,17 @@ export async function ensureHandLandmarker() {
       return landmarker;
     } catch (error) {
       console.error(error);
-      state.handLandmarker = null;
-      state.handInitPromise = null;
+      mutateState((draft) => {
+        draft.handLandmarker = null;
+        draft.handInitPromise = null;
+      });
       if (STATUS) {
         STATUS.innerText = 'Hand Landmarker konnte nicht geladen werden.';
       }
       return null;
     }
-  })();
+    })();
+  });
 
   return state.handInitPromise;
 }
@@ -117,24 +126,25 @@ export function runGestureLoop() {
     const detection = await detectHandLandmarks(CAPTURE_VIDEO);
     drawSkeletonOnCanvas(detection?.landmarks ?? null);
 
-    if (!detection || detection.vector.length !== FEATURE_SIZE) return;
-    if (state.gatherDataState === STOP_DATA_GATHER) return;
+  if (!detection || detection.vector.length !== GESTURE_FEATURE_SIZE) return;
+  if (state.gatherDataState === STOP_DATA_GATHER) return;
 
-    const now = performance.now();
-    if (now - state.gestureLastSampleTs < SAMPLE_INTERVAL_MS) return;
+  const now = performance.now();
+  if (now - state.gestureLastSampleTs < GESTURE_SAMPLE_INTERVAL_MS) return;
 
-    state.gestureSamples.push({
+  mutateState((draft) => {
+    draft.gestureSamples.push({
       landmarks: detection.vector,
-      labelId: state.gatherDataState,
+      labelId: draft.gatherDataState,
     });
-    state.gestureLastSampleTs = now;
-
-    if (state.examplesCount[state.gatherDataState] === undefined) {
-      state.examplesCount[state.gatherDataState] = 0;
+    draft.gestureLastSampleTs = now;
+    if (draft.examplesCount[draft.gatherDataState] === undefined) {
+      draft.examplesCount[draft.gatherDataState] = 0;
     }
-    state.examplesCount[state.gatherDataState]++;
-    updateExampleCounts();
-  };
+    draft.examplesCount[draft.gatherDataState]++;
+  });
+  updateExampleCounts();
+};
 
   gestureLoopHandle = window.requestAnimationFrame(loop);
 }
@@ -144,14 +154,16 @@ export function stopGestureLoop() {
     window.cancelAnimationFrame(gestureLoopHandle);
     gestureLoopHandle = null;
   }
-  state.gestureLastSampleTs = 0;
+  mutateState((draft) => {
+    draft.gestureLastSampleTs = 0;
+  });
   drawSkeletonOnCanvas(null);
 }
 
 export async function predictGesture() {
   if (!state.model) return null;
   const detection = await detectHandLandmarks(PREVIEW_VIDEO);
-  if (!detection || detection.vector.length !== FEATURE_SIZE) {
+  if (!detection || detection.vector.length !== GESTURE_FEATURE_SIZE) {
     clearGestureOverlay();
     return null;
   }
@@ -159,7 +171,7 @@ export async function predictGesture() {
   drawHandOverlay(detection.landmarks);
 
   const probabilities = tf.tidy(() => {
-    const input = tf.tensor2d([detection.vector], [1, FEATURE_SIZE]);
+    const input = tf.tensor2d([detection.vector], [1, GESTURE_FEATURE_SIZE]);
     const prediction = state.model.predict(input).squeeze();
     return prediction.arraySync();
   });
@@ -182,15 +194,16 @@ export async function trainGestureModel({ batchSize, epochs, learningRate, onEpo
 
   const outputUnits = Math.max(state.classNames.length, 1);
 
-  if (state.model) {
-    state.model.dispose();
-  }
-
-  state.model = buildGestureClassifier(outputUnits, learningRate);
+  mutateState((draft) => {
+    if (draft.model) {
+      draft.model.dispose();
+    }
+    draft.model = buildGestureClassifier(outputUnits, learningRate);
+  });
 
   const xs = tf.tensor2d(
     state.gestureSamples.map((sample) => sample.landmarks),
-    [state.gestureSamples.length, FEATURE_SIZE]
+    [state.gestureSamples.length, GESTURE_FEATURE_SIZE]
   );
   const labelTensor = tf.tensor1d(
     state.gestureSamples.map((sample) => sample.labelId),
@@ -218,7 +231,7 @@ export async function trainGestureModel({ batchSize, epochs, learningRate, onEpo
 
 function buildGestureClassifier(outputUnits, learningRate) {
   const model = tf.sequential();
-  model.add(tf.layers.dense({ inputShape: [FEATURE_SIZE], units: 64, activation: 'relu' }));
+  model.add(tf.layers.dense({ inputShape: [GESTURE_FEATURE_SIZE], units: 64, activation: 'relu' }));
   model.add(tf.layers.dense({ units: outputUnits, activation: 'softmax' }));
 
   const lr = sanitizeLearningRate(learningRate);
@@ -240,7 +253,9 @@ async function detectHandLandmarks(videoEl) {
   const landmarker = await ensureHandLandmarker();
   if (!landmarker) return null;
 
-  state.handBusy = true;
+  mutateState((draft) => {
+    draft.handBusy = true;
+  });
   try {
     const nowInMs = performance.now();
     const result = landmarker.detectForVideo(videoEl, nowInMs);
@@ -252,7 +267,9 @@ async function detectHandLandmarks(videoEl) {
     console.error(error);
     return null;
   } finally {
-    state.handBusy = false;
+    mutateState((draft) => {
+      draft.handBusy = false;
+    });
   }
 }
 

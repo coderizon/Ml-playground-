@@ -3,6 +3,10 @@ export const MOBILE_NET_INPUT_HEIGHT = 224;
 export const STOP_DATA_GATHER = -1;
 export const ARDUINO_SEND_THRESHOLD = 0.6;
 export const ARDUINO_SEND_COOLDOWN_MS = 500;
+export const DEFAULT_TRAINING_EPOCHS = 10;
+export const DEFAULT_TRAINING_BATCH_SIZE = 5;
+export const DEFAULT_TRAINING_LR = 0.001;
+export const SUPPORTED_MODES = ['image', 'gesture', 'face', 'audio', 'pose'];
 
 export const BAR_COLORS = [
   ['#f07818', '#ffd8ba'],
@@ -17,5 +21,23 @@ export const MODE_NAMES = {
   image: 'Bildklassifikation',
   gesture: 'Gestenerkennung',
   face: 'Gesichtserkennung',
-
+  audio: 'Audioerkennung',
+  pose: 'Posen-Erkennung',
 };
+
+export const GESTURE_FEATURE_SIZE = 63; // 21 points * 3 coords
+export const GESTURE_SAMPLE_INTERVAL_MS = 120;
+export const POSE_FEATURE_SIZE = 99; // 33 points * 3 coords
+export const POSE_SAMPLE_INTERVAL_MS = 120;
+
+export const AUDIO_SAMPLE_DURATION_MS = 1000;
+export const AUDIO_PREVIEW_PROBABILITY_THRESHOLD = 0.6;
+export const AUDIO_OVERLAP_FACTOR = 0.5;
+export const AUDIO_VIZ_FFT_SIZE = 1024;
+export const CLASS_DEFAULT_PREFIX = 'Class';
+export const DEFAULT_COLLECT_LABEL = 'Zum Aufnehmen halten';
+export const DEFAULT_CAPTURE_LABEL = 'Webcam';
+export const AUDIO_CAPTURE_LABEL = 'Mikrofon';
+export const AUDIO_OPEN_BUTTON_LABEL = 'Audio';
+export const AUDIO_COLLECT_LABEL = 'Sample aufnehmen';
+export const POSE_CAPTURE_LABEL = 'Kamera';

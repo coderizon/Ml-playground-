@@ -1,5 +1,5 @@
 import { modeMenu } from '../domRefs.js';
-import { state } from '../state.js';
+import { getState } from '../state.js';
 
 export function toggleModeMenu() {
   if (!modeMenu) return;
@@ -14,7 +14,8 @@ export function closeModeMenu() {
 
 export function updateModeMenuActive() {
   if (!modeMenu) return;
+  const currentMode = getState().currentMode;
   Array.from(modeMenu.querySelectorAll('[data-mode]')).forEach((btn) => {
-    btn.classList.toggle('active', btn.getAttribute('data-mode') === state.currentMode);
+    btn.classList.toggle('active', btn.getAttribute('data-mode') === currentMode);
   });
 }

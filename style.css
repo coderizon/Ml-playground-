@@ -343,6 +343,16 @@ body[data-step="preview"] .preview-column {
   position: relative;
 }
 
+#audioVisualizer {
+  width: 100%;
+  height: auto;
+  min-height: 180px;
+  display: block;
+  background: radial-gradient(circle at 20% 20%, rgba(34, 211, 238, 0.12), transparent 40%),
+    radial-gradient(circle at 80% 10%, rgba(14, 165, 233, 0.12), transparent 40%),
+    linear-gradient(135deg, #0f172a, #0b1020);
+}
+
 button {
   border: none;
   border-radius: 10px;
@@ -1330,6 +1340,19 @@ body.landing-active {
   justify-content: center;
 }
 
+.model-card-hero.pose-placeholder {
+  background: radial-gradient(circle at 20% 30%, rgba(34, 197, 94, 0.14), transparent 42%),
+    radial-gradient(circle at 80% 20%, rgba(59, 130, 246, 0.14), transparent 40%),
+    linear-gradient(145deg, #0b172d, #0e1826);
+  color: #e2e8f0;
+  font-weight: 700;
+  text-align: center;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .model-card-placeholder-text {
   max-width: 260px;
   line-height: 1.4;
@@ -1390,7 +1413,6 @@ body.landing-active {
   background: transparent;
   color: #f97316;
   border: 1px solid #f97316;
-}
 }
 
 .model-card.is-disabled {

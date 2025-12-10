@@ -1,5 +1,5 @@
 import { STOP_DATA_GATHER } from '../constants.js';
-import { state } from '../state.js';
+import { getState, mutateState, setState } from '../state.js';
 import { CAPTURE_VIDEO, PREVIEW_VIDEO, STATUS } from '../domRefs.js';
 
 export const captureCanvas = document.createElement('canvas');
@@ -10,25 +10,31 @@ export function hasGetUserMedia() {
 }
 
 export function stopCurrentStream() {
-  if (!state.currentStream) return;
-  state.currentStream.getTracks().forEach((track) => track.stop());
-  state.currentStream = null;
-  state.videoPlaying = false;
+  const current = getState().currentStream;
+  if (!current) return;
+  current.getTracks().forEach((track) => track.stop());
+  mutateState((draft) => {
+    draft.currentStream = null;
+    draft.videoPlaying = false;
+  });
 }
 
 function attachStreamToVideos(stream) {
   CAPTURE_VIDEO.srcObject = stream;
   PREVIEW_VIDEO.srcObject = stream;
   CAPTURE_VIDEO.addEventListener('loadeddata', function onLoad() {
-    state.videoPlaying = true;
+    mutateState((draft) => {
+      draft.videoPlaying = true;
+    });
     CAPTURE_VIDEO.classList.remove('hidden');
     CAPTURE_VIDEO.removeEventListener('loadeddata', onLoad);
   });
 }
 
 export function updateSwitchButtonsLabel() {
-  const targetLabel = state.preferredFacingMode === 'user' ? 'Außenkamera' : 'Selfie-Kamera';
-  state.switchCameraButtons.forEach((btn) => {
+  const { preferredFacingMode, switchCameraButtons } = getState();
+  const targetLabel = preferredFacingMode === 'user' ? 'Außenkamera' : 'Selfie-Kamera';
+  switchCameraButtons.forEach((btn) => {
     if (btn) btn.textContent = targetLabel;
   });
 }
@@ -39,8 +45,9 @@ export async function enableCam(allowFallback = true) {
     return;
   }
 
+  const { currentStream, preferredFacingMode } = getState();
   const facingConstraint =
-    state.preferredFacingMode === 'environment' ? { exact: 'environment' } : 'user';
+    preferredFacingMode === 'environment' ? { exact: 'environment' } : 'user';
   const constraints = {
     video: {
       width: 640,
@@ -50,18 +57,23 @@ export async function enableCam(allowFallback = true) {
     },
   };
 
-  if (state.currentStream) {
-    attachStreamToVideos(state.currentStream);
+  if (currentStream) {
+    attachStreamToVideos(currentStream);
     return;
   }
 
   try {
-    state.currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-    attachStreamToVideos(state.currentStream);
+    const stream = await navigator.mediaDevices.getUserMedia(constraints);
+    mutateState((draft) => {
+      draft.currentStream = stream;
+    });
+    attachStreamToVideos(stream);
   } catch (err) {
     console.error(err);
-    if (allowFallback && state.preferredFacingMode === 'environment') {
-      state.preferredFacingMode = 'user';
+    if (allowFallback && preferredFacingMode === 'environment') {
+      mutateState((draft) => {
+        draft.preferredFacingMode = 'user';
+      });
       updateSwitchButtonsLabel();
       if (STATUS) {
         STATUS.innerText = 'Außenkamera nicht verfügbar, Selfie-Kamera aktiviert.';
@@ -75,7 +87,7 @@ export async function enableCam(allowFallback = true) {
 }
 
 export function moveCaptureToSlot(idx) {
-  const slot = state.captureSlots.find(
+  const slot = getState().captureSlots.find(
     (s) => parseInt(s.getAttribute('data-class-slot'), 10) === idx
   );
   if (!slot) return;
@@ -91,8 +103,11 @@ export function moveCaptureToSlot(idx) {
 }
 
 export function openWebcamForClass(idx) {
-  state.activeClassIndex = idx;
-  state.webcamPanels.forEach((panel) => {
+  const appState = getState();
+  mutateState((draft) => {
+    draft.activeClassIndex = idx;
+  });
+  appState.webcamPanels.forEach((panel) => {
     panel.classList.toggle(
       'visible',
       parseInt(panel.getAttribute('data-class-panel'), 10) === idx
@@ -101,15 +116,15 @@ export function openWebcamForClass(idx) {
   moveCaptureToSlot(idx);
   enableCam();
   if (STATUS) {
-    STATUS.innerText = `Webcam geöffnet für ${state.classNames[idx]}. Halte zum Aufnehmen.`;
+    STATUS.innerText = `Webcam geöffnet für ${appState.classNames[idx]}. Halte zum Aufnehmen.`;
   }
 }
 
 export function hideWebcamPanel(idx) {
-  if (state.gatherDataState !== STOP_DATA_GATHER) {
-    state.gatherDataState = STOP_DATA_GATHER;
+  if (getState().gatherDataState !== STOP_DATA_GATHER) {
+    setState({ gatherDataState: STOP_DATA_GATHER });
   }
-  const panel = state.webcamPanels.find(
+  const panel = getState().webcamPanels.find(
     (p) => parseInt(p.getAttribute('data-class-panel'), 10) === idx
   );
   if (panel) {
@@ -118,12 +133,14 @@ export function hideWebcamPanel(idx) {
 }
 
 export function toggleCameraFacing() {
-  state.preferredFacingMode = state.preferredFacingMode === 'user' ? 'environment' : 'user';
+  mutateState((draft) => {
+    draft.preferredFacingMode = draft.preferredFacingMode === 'user' ? 'environment' : 'user';
+  });
   stopCurrentStream();
-  moveCaptureToSlot(state.activeClassIndex);
+  moveCaptureToSlot(getState().activeClassIndex);
   enableCam();
   updateSwitchButtonsLabel();
-  return state.preferredFacingMode === 'environment'
+  return getState().preferredFacingMode === 'environment'
     ? 'Außenkamera aktiviert.'
     : 'Selfie-Kamera aktiviert.';
 }

@@ -1,4 +1,6 @@
 import {
+  DEFAULT_TRAINING_BATCH_SIZE,
+  DEFAULT_TRAINING_EPOCHS,
   MOBILE_NET_INPUT_HEIGHT,
   MOBILE_NET_INPUT_WIDTH,
   STOP_DATA_GATHER,
@@ -13,32 +15,45 @@ import {
   trainingProgressLabel,
   trainingProgressValue,
 } from '../domRefs.js';
-import { state } from '../state.js';
+import { getState, mutateState, setState } from '../state.js';
 import { lockCapturePanels, updateExampleCounts } from '../ui/classes.js';
 import { renderProbabilities } from '../ui/probabilities.js';
 import { setMobileStep } from '../ui/steps.js';
-
 import { predictGesture, trainGestureModel } from './gesture.js';
+import { predictPose, trainPoseModel } from './pose.js';
+import {
+  attachAudioVisualizer,
+  startAudioCollection,
+  startAudioPreview,
+  stopAudioCollection,
+  stopAudioPreview,
+  trainAudioModel,
+} from './audio.js';
 
 const defaultTrainLabel = TRAIN_BUTTON ? TRAIN_BUTTON.textContent : 'Modell trainieren';
+const state = getState();
 
 export async function trainAndPredict() {
-
   if (state.trainingCompleted || state.trainingInProgress) return;
 
-  if (state.currentMode === 'face') {
-    if (STATUS) {
-      STATUS.innerText = 'Gesichtserkennung läuft ohne Training.';
-    }
-    return;
+  switch (state.currentMode) {
+    case 'face':
+      if (STATUS) {
+        STATUS.innerText = 'Gesichtserkennung läuft ohne Training.';
+      }
+      return;
+    case 'gesture':
+      await trainGestureWorkflow();
+      return;
+    case 'pose':
+      await trainPoseWorkflow();
+      return;
+    case 'audio':
+      await trainAudioWorkflow();
+      return;
+    default:
+      await trainImageWorkflow();
   }
-
-  if (state.currentMode === 'gesture') {
-    await trainGestureWorkflow();
-    return;
-  }
-
-  await trainImageWorkflow();
 }
 
 async function trainGestureWorkflow() {
@@ -50,8 +65,7 @@ async function trainGestureWorkflow() {
   }
 
   const { batchSize, epochs } = getTrainingHyperparams();
-  state.predict = false;
-  state.trainingInProgress = true;
+  setTrainingFlags({ predict: false, trainingInProgress: true });
   setTrainingButtonState(true);
   startTrainingUi(epochs);
 
@@ -63,8 +77,7 @@ async function trainGestureWorkflow() {
       onEpochEnd: (epoch, logs) => updateTrainingProgressUi(epoch + 1, epochs, logs),
     });
 
-    state.predict = true;
-    state.trainingCompleted = true;
+    setTrainingFlags({ predict: true, trainingCompleted: true });
     completeTrainingUi(epochs);
     lockCapturePanels();
     showPreview();
@@ -73,7 +86,72 @@ async function trainGestureWorkflow() {
   } catch (error) {
     handleTrainingError(error);
   } finally {
-    state.trainingInProgress = false;
+    setTrainingFlags({ trainingInProgress: false });
+    setTrainingButtonState(false);
+  }
+}
+
+async function trainPoseWorkflow() {
+  if (!state.poseSamples.length) {
+    if (STATUS) {
+      STATUS.innerText = 'Bitte sammle zuerst Pose-Beispiele.';
+    }
+    return;
+  }
+
+  const { batchSize, epochs } = getTrainingHyperparams();
+  setTrainingFlags({ predict: false, trainingInProgress: true });
+  setTrainingButtonState(true);
+  startTrainingUi(epochs);
+
+  try {
+    await trainPoseModel({
+      batchSize,
+      epochs,
+      learningRate: state.trainingLearningRate,
+      onEpochEnd: (epoch, logs) => updateTrainingProgressUi(epoch + 1, epochs, logs),
+    });
+    setTrainingFlags({ predict: true, trainingCompleted: true });
+    completeTrainingUi(epochs);
+    lockCapturePanels();
+    showPreview();
+    setMobileStep('preview');
+    predictLoop();
+  } catch (error) {
+    handleTrainingError(error);
+  } finally {
+    setTrainingFlags({ trainingInProgress: false });
+    setTrainingButtonState(false);
+  }
+}
+
+async function trainAudioWorkflow() {
+  const { batchSize, epochs } = getTrainingHyperparams();
+  setTrainingFlags({ predict: false, trainingInProgress: true });
+  setTrainingButtonState(true);
+  startTrainingUi(epochs);
+
+  try {
+    await trainAudioModel({
+      batchSize,
+      epochs,
+      onEpochEnd: (epoch, logs) => updateTrainingProgressUi(epoch + 1, epochs, logs),
+    });
+
+    setTrainingFlags({ predict: true, trainingCompleted: true });
+    completeTrainingUi(epochs);
+    lockCapturePanels();
+    setMobileStep('preview');
+    await startAudioPreview((probs, bestIndex, labels) => {
+      renderProbabilities(probs, bestIndex, labels);
+    });
+    if (STATUS) {
+      STATUS.innerText = 'Audio-Modell trainiert. Live-Vorhersage läuft.';
+    }
+  } catch (error) {
+    handleTrainingError(error);
+  } finally {
+    setTrainingFlags({ trainingInProgress: false });
     setTrainingButtonState(false);
   }
 }
@@ -87,8 +165,7 @@ async function trainImageWorkflow() {
   }
 
   const { batchSize, epochs } = getTrainingHyperparams();
-  state.predict = false;
-  state.trainingInProgress = true;
+  setTrainingFlags({ predict: false, trainingInProgress: true });
   setTrainingButtonState(true);
   startTrainingUi(epochs);
 
@@ -111,8 +188,7 @@ async function trainImageWorkflow() {
       },
     });
 
-    state.predict = true;
-    state.trainingCompleted = true;
+    setTrainingFlags({ predict: true, trainingCompleted: true });
     completeTrainingUi(epochs);
     lockCapturePanels();
     showPreview();
@@ -124,7 +200,7 @@ async function trainImageWorkflow() {
     outputsAsTensor?.dispose();
     oneHotOutputs?.dispose();
     inputsAsTensor?.dispose();
-    state.trainingInProgress = false;
+    setTrainingFlags({ trainingInProgress: false });
     setTrainingButtonState(false);
   }
 }
@@ -199,7 +275,9 @@ function handleTrainingError(error) {
 }
 
 function resetTrainingUi() {
-  state.trainingInProgress = false;
+  mutateState((draft) => {
+    draft.trainingInProgress = false;
+  });
   if (trainingProgress) {
     trainingProgress.classList.add('hidden');
   }
@@ -216,8 +294,9 @@ function resetTrainingUi() {
 }
 
 function getTrainingHyperparams() {
-  const safeBatchSize = sanitizeInteger(state.trainingBatchSize, 5);
-  const safeEpochs = sanitizeInteger(state.trainingEpochs, 10);
+  const state = getState();
+  const safeBatchSize = sanitizeInteger(state.trainingBatchSize, DEFAULT_TRAINING_BATCH_SIZE);
+  const safeEpochs = sanitizeInteger(state.trainingEpochs, DEFAULT_TRAINING_EPOCHS);
   return { batchSize: safeBatchSize, epochs: safeEpochs };
 }
 
@@ -231,7 +310,9 @@ export function showPreview() {
   if (STATUS) {
     STATUS.innerText = '';
   }
-  PREVIEW_VIDEO.classList.remove('hidden');
+  if (state.currentMode !== 'audio') {
+    PREVIEW_VIDEO.classList.remove('hidden');
+  }
   const hasFrame = () =>
     PREVIEW_VIDEO.readyState >= 2 &&
     PREVIEW_VIDEO.videoWidth > 0 &&
@@ -239,7 +320,7 @@ export function showPreview() {
 
   const markPreviewReady = () => {
     if (!hasFrame()) return;
-    state.previewReady = true;
+    setState({ previewReady: true });
     renderProbabilities(state.lastPrediction);
     PREVIEW_VIDEO.removeEventListener('loadeddata', markPreviewReady);
     PREVIEW_VIDEO.removeEventListener('canplay', markPreviewReady);
@@ -257,9 +338,16 @@ export function showPreview() {
 }
 
 export async function predictLoop() {
-  if (!state.predict) return;
+  if (!state.predict) {
+    if (state.currentMode === 'audio') {
+      stopAudioPreview();
+    }
+    return;
+  }
 
-
+  if (state.currentMode === 'face') {
+    return;
+  }
 
   if (state.currentMode === 'gesture') {
     if (state.previewReady && state.trainingCompleted) {
@@ -275,6 +363,30 @@ export async function predictLoop() {
       }
     }
     window.requestAnimationFrame(predictLoop);
+    return;
+  }
+
+  if (state.currentMode === 'pose') {
+    if (state.previewReady && state.trainingCompleted) {
+      try {
+        const result = await predictPose();
+        if (result) {
+          renderProbabilities(result.probabilities, result.bestIndex, state.classNames);
+        } else {
+          renderProbabilities([], -1, state.classNames);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    window.requestAnimationFrame(predictLoop);
+    return;
+  }
+
+  if (state.currentMode === 'audio') {
+    await startAudioPreview((probs, bestIndex, labels) => {
+      renderProbabilities(probs, bestIndex, labels);
+    });
     return;
   }
 
@@ -305,25 +417,34 @@ export async function predictLoop() {
 }
 
 export function handleCollectStart(event) {
-  console.log('[Debug] handleCollectStart triggered.');
   event.preventDefault();
   const classNumber = parseInt(event.currentTarget.getAttribute('data-1hot'), 10);
-  state.gatherDataState = classNumber;
+  if (Number.isNaN(classNumber)) return;
+
+  if (state.currentMode === 'audio') {
+    attachVisualizerForClass(classNumber);
+    startAudioCollection(classNumber);
+    return;
+  }
+
+  setState({ gatherDataState: classNumber });
   dataGatherLoop();
 }
 
 export function handleCollectEnd(event) {
-  console.log('[Debug] handleCollectEnd triggered.');
   event.preventDefault();
-  state.gatherDataState = STOP_DATA_GATHER;
+  if (state.currentMode === 'audio') {
+    stopAudioCollection();
+    return;
+  }
+  setState({ gatherDataState: STOP_DATA_GATHER });
 }
 
 async function dataGatherLoop() {
   if (state.currentMode !== 'image') return;
-  console.log('[Debug] dataGatherLoop frame. State:', state.gatherDataState);
 
   if (!state.videoPlaying && CAPTURE_VIDEO?.readyState >= 2) {
-    state.videoPlaying = true;
+    setState({ videoPlaying: true });
   }
   if (state.videoPlaying && state.gatherDataState !== STOP_DATA_GATHER) {
     collectImageExample();
@@ -343,18 +464,22 @@ function collectImageExample() {
     return state.mobilenet.predict(normalizedTensorFrame.expandDims()).squeeze();
   });
 
-  state.trainingDataInputs.push(imageFeatures);
-  state.trainingDataOutputs.push(state.gatherDataState);
+  mutateState((draft) => {
+    draft.trainingDataInputs.push(imageFeatures);
+    draft.trainingDataOutputs.push(draft.gatherDataState);
+  });
   handleExampleBookkeeping();
 }
 
 function handleExampleBookkeeping() {
   vibrateFeedback();
 
-  if (state.examplesCount[state.gatherDataState] === undefined) {
-    state.examplesCount[state.gatherDataState] = 0;
-  }
-  state.examplesCount[state.gatherDataState]++;
+  mutateState((draft) => {
+    if (draft.examplesCount[draft.gatherDataState] === undefined) {
+      draft.examplesCount[draft.gatherDataState] = 0;
+    }
+    draft.examplesCount[draft.gatherDataState]++;
+  });
 
   updateExampleCounts();
 }
@@ -362,5 +487,18 @@ function handleExampleBookkeeping() {
 function vibrateFeedback() {
   if (navigator.vibrate) {
     navigator.vibrate(15);
+  }
+}
+
+function setTrainingFlags(flags) {
+  setState(flags);
+}
+
+function attachVisualizerForClass(idx) {
+  const slot = state.captureSlots.find(
+    (s) => parseInt(s.getAttribute('data-class-slot'), 10) === idx
+  );
+  if (slot) {
+    attachAudioVisualizer(slot);
   }
 }

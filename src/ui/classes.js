@@ -1,5 +1,12 @@
+import {
+  CLASS_DEFAULT_PREFIX,
+  DEFAULT_CAPTURE_LABEL,
+  DEFAULT_COLLECT_LABEL,
+} from '../constants.js';
 import { CAPTURE_VIDEO, STATUS, addClassButton, classesColumn } from '../domRefs.js';
-import { state } from '../state.js';
+import { getState, mutateState } from '../state.js';
+
+const state = getState();
 
 export function initializeExistingClasses(handlers = {}) {
   const existingCards = document.querySelectorAll('.class-card');
@@ -17,7 +24,9 @@ export function addNewClassCard(handlers = {}) {
     classesColumn.appendChild(newCard);
   }
   setupClassCard(newCard, newIndex, handlers);
-  state.examplesCount[newIndex] = 0;
+  mutateState((draft) => {
+    draft.examplesCount[newIndex] = 0;
+  });
   updateExampleCounts();
   return newIndex;
 }
@@ -35,6 +44,7 @@ export function setupClassCard(card, idx, handlers = {}) {
   const nameInput = card.querySelector('.class-name-input');
   const openBtn = card.querySelector('.open-webcam');
   const panel = card.querySelector('.webcam-panel');
+  const panelLabel = panel ? panel.querySelector('.panel-top span') : null;
   const closeBtn = panel ? panel.querySelector('.icon-close') : null;
   const switchBtn = panel ? panel.querySelector('.switch-camera') : null;
   const slot = card.querySelector('.capture-slot');
@@ -50,25 +60,33 @@ export function setupClassCard(card, idx, handlers = {}) {
   collectorBtn.setAttribute('data-1hot', idx);
   countChip.setAttribute('data-count-for', idx);
 
-  const classLabel = nameInput.value || `Class ${idx + 1}`;
-  state.classNames[idx] = classLabel;
-  collectorBtn.setAttribute('data-name', classLabel);
+  const classLabel = nameInput.value || getDefaultClassLabel(idx);
+  collectorBtn.textContent = DEFAULT_COLLECT_LABEL;
+  mutateState((draft) => {
+    draft.classNames[idx] = classLabel;
+    collectorBtn.setAttribute('data-name', classLabel);
+    draft.classNameInputs[idx] = nameInput;
+    draft.openWebcamButtons[idx] = openBtn;
+    draft.webcamPanels[idx] = panel;
+    draft.captureSlots[idx] = slot;
+    draft.dataCollectorButtons[idx] = collectorBtn;
+    draft.countChips[idx] = countChip;
+    if (switchBtn) {
+      draft.switchCameraButtons[idx] = switchBtn;
+    }
+  });
 
-  state.classNameInputs[idx] = nameInput;
-  state.openWebcamButtons[idx] = openBtn;
-  state.webcamPanels[idx] = panel;
-  state.captureSlots[idx] = slot;
-  state.dataCollectorButtons[idx] = collectorBtn;
-  state.countChips[idx] = countChip;
-  if (switchBtn) {
-    state.switchCameraButtons[idx] = switchBtn;
+  if (panelLabel) {
+    panelLabel.textContent = DEFAULT_CAPTURE_LABEL;
   }
 
   const clearNameOnce = () => {
     if (nameInput.dataset.cleared === 'true') return;
     nameInput.dataset.cleared = 'true';
     nameInput.value = '';
-    state.classNames[idx] = '';
+    mutateState((draft) => {
+      draft.classNames[idx] = '';
+    });
     collectorBtn.setAttribute('data-name', '');
     onNameChange(idx, state.classNames[idx]);
   };
@@ -77,8 +95,11 @@ export function setupClassCard(card, idx, handlers = {}) {
   nameInput.addEventListener('pointerdown', clearNameOnce);
 
   nameInput.addEventListener('input', () => {
-    state.classNames[idx] = nameInput.value || `Class ${idx + 1}`;
-    collectorBtn.setAttribute('data-name', state.classNames[idx]);
+    const nextName = nameInput.value || getDefaultClassLabel(idx);
+    mutateState((draft) => {
+      draft.classNames[idx] = nextName;
+    });
+    collectorBtn.setAttribute('data-name', nextName);
     if (STATUS) {
       STATUS.innerText = `Klasse ${idx + 1} benannt als ${state.classNames[idx]}.`;
     }
@@ -113,22 +134,24 @@ function attachCollectorButtonListeners(btn, onCollectStart, onCollectEnd) {
 }
 
 function buildClassCardElement(idx) {
+  const defaultLabel = getDefaultClassLabel(idx);
+  const panelLabel = DEFAULT_CAPTURE_LABEL;
   const card = document.createElement('div');
   card.className = 'card class-card';
   card.innerHTML = `
     <div class="card-header">
       <div class="title-group editable">
-        <input class="class-name-input" data-class-index="${idx}" value="Class ${idx + 1}" aria-label="Klassenname eingeben">
+        <input class="class-name-input" data-class-index="${idx}" value="${defaultLabel}" aria-label="Klassenname eingeben">
       </div>
       <span class="dots">⋮</span>
     </div>
     <p class="section-label">Beispiele hinzufügen:</p>
     <div class="action-row">
-      <button class="open-webcam ghost" data-class-index="${idx}">Webcam</button>
+      <button class="open-webcam ghost" data-class-index="${idx}">${panelLabel}</button>
     </div>
     <div class="webcam-panel" data-class-panel="${idx}">
       <div class="panel-top">
-        <span>Webcam</span>
+        <span>${panelLabel}</span>
         <div class="panel-actions">
           <button class="ghost switch-camera" data-switch-camera aria-label="Kamera wechseln">Außenkamera</button>
           <button class="icon-close" data-close-panel="${idx}" aria-label="Panel schließen">×</button>
@@ -138,10 +161,14 @@ function buildClassCardElement(idx) {
         <span class="count-chip" data-count-for="${idx}">0 Beispiele</span>
       </div>
       <div class="capture-slot" data-class-slot="${idx}"></div>
-      <button class="dataCollector primary block" data-1hot="${idx}" data-name="Class ${idx + 1}">Zum Aufnehmen halten</button>
+      <button class="dataCollector primary block" data-1hot="${idx}" data-name="${defaultLabel}">${DEFAULT_COLLECT_LABEL}</button>
     </div>
   `;
   return card;
+}
+
+function getDefaultClassLabel(idx) {
+  return `${CLASS_DEFAULT_PREFIX} ${idx + 1}`;
 }
 
 export function updateExampleCounts(reset = false) {
@@ -157,15 +184,17 @@ export function resetClassCards(handlers = {}) {
     classesColumn.querySelectorAll('.class-card').forEach((card) => card.remove());
   }
 
-  state.classNames.length = 0;
-  state.examplesCount.length = 0;
-  state.classNameInputs.length = 0;
-  state.openWebcamButtons.length = 0;
-  state.webcamPanels.length = 0;
-  state.captureSlots.length = 0;
-  state.dataCollectorButtons.length = 0;
-  state.countChips.length = 0;
-  state.switchCameraButtons.length = 0;
+  mutateState((draft) => {
+    draft.classNames.length = 0;
+    draft.examplesCount.length = 0;
+    draft.classNameInputs.length = 0;
+    draft.openWebcamButtons.length = 0;
+    draft.webcamPanels.length = 0;
+    draft.captureSlots.length = 0;
+    draft.dataCollectorButtons.length = 0;
+    draft.countChips.length = 0;
+    draft.switchCameraButtons.length = 0;
+  });
 
   addNewClassCard(handlers);
   updateExampleCounts(true);
@@ -173,7 +202,9 @@ export function resetClassCards(handlers = {}) {
 
 export function lockCapturePanels() {
   state.webcamPanels.forEach((panel) => panel.classList.remove('visible'));
-  CAPTURE_VIDEO.classList.add('hidden');
+  if (CAPTURE_VIDEO) {
+    CAPTURE_VIDEO.classList.add('hidden');
+  }
   state.openWebcamButtons.forEach((btn) => (btn.disabled = true));
   state.dataCollectorButtons.forEach((btn) => (btn.disabled = true));
 }
@@ -181,5 +212,24 @@ export function lockCapturePanels() {
 export function unlockCapturePanels() {
   state.openWebcamButtons.forEach((btn) => (btn.disabled = false));
   state.dataCollectorButtons.forEach((btn) => (btn.disabled = false));
-  CAPTURE_VIDEO.classList.remove('hidden');
+  if (CAPTURE_VIDEO) {
+    CAPTURE_VIDEO.classList.remove('hidden');
+  }
+}
+
+export function updateClassCardCopy({
+  openButtonLabel = DEFAULT_CAPTURE_LABEL,
+  panelLabel = DEFAULT_CAPTURE_LABEL,
+  collectorLabel = DEFAULT_COLLECT_LABEL,
+} = {}) {
+  state.openWebcamButtons.forEach((btn) => {
+    if (btn) btn.textContent = openButtonLabel;
+  });
+  state.webcamPanels.forEach((panel) => {
+    const labelEl = panel?.querySelector('.panel-top span');
+    if (labelEl) labelEl.textContent = panelLabel;
+  });
+  state.dataCollectorButtons.forEach((btn) => {
+    if (btn) btn.textContent = collectorLabel;
+  });
 }
