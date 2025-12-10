@@ -685,15 +685,41 @@ button:disabled {
 }
 
 .ble-device-thumb.thumb-arduino {
-  top: -1px;
+  top: 4px;
 }
 
 .ble-device-thumb.thumb-calliope {
-  top: -4px;
+  top: -69px;
 }
 
 .ble-device-thumb.thumb-microbit {
-  top: -6px;
+  top: 1px;
+}
+
+@media (max-width: 640px) {
+  .ble-device {
+    padding: 14px 120px 14px 18px;
+    min-height: 82px;
+  }
+
+  .ble-device-thumb {
+    width: 60%;
+    min-width: 140px;
+    right: 8px;
+    bottom: -4px;
+  }
+
+  .ble-device-thumb.thumb-arduino {
+    top: 6px;
+  }
+
+  .ble-device-thumb.thumb-calliope {
+    top: -42px;
+  }
+
+  .ble-device-thumb.thumb-microbit {
+    top: 4px;
+  }
 }
 
 .preview-output {
