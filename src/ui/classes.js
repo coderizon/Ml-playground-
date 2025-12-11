@@ -120,17 +120,35 @@ export function setupClassCard(card, idx, handlers = {}) {
 }
 
 function attachCollectorButtonListeners(btn, onCollectStart, onCollectEnd) {
+  const handlePressStart = (event) => {
+    if (getState().currentMode === 'audio') return;
+    onCollectStart(event);
+  };
+
+  const handlePressEnd = (event) => {
+    if (getState().currentMode === 'audio') return;
+    onCollectEnd(event);
+  };
+
+  const handleAudioClick = (event) => {
+    if (getState().currentMode !== 'audio') return;
+    event.preventDefault();
+    onCollectStart(event);
+  };
+
   const supportsPointer = 'onpointerdown' in window;
   if (supportsPointer) {
-    btn.addEventListener('pointerdown', onCollectStart, { passive: false });
-    btn.addEventListener('pointerup', onCollectEnd);
-    btn.addEventListener('pointerleave', onCollectEnd);
+    btn.addEventListener('pointerdown', handlePressStart, { passive: false });
+    btn.addEventListener('pointerup', handlePressEnd);
+    btn.addEventListener('pointerleave', handlePressEnd);
   } else {
-    btn.addEventListener('mousedown', onCollectStart);
-    btn.addEventListener('mouseup', onCollectEnd);
-    btn.addEventListener('touchstart', onCollectStart, { passive: false });
-    btn.addEventListener('touchend', onCollectEnd);
+    btn.addEventListener('mousedown', handlePressStart);
+    btn.addEventListener('mouseup', handlePressEnd);
+    btn.addEventListener('touchstart', handlePressStart, { passive: false });
+    btn.addEventListener('touchend', handlePressEnd);
   }
+
+  btn.addEventListener('click', handleAudioClick);
 }
 
 function buildClassCardElement(idx) {
@@ -170,6 +188,7 @@ function buildClassCardElement(idx) {
 function getDefaultClassLabel(idx) {
   return `${CLASS_DEFAULT_PREFIX} ${idx + 1}`;
 }
+
 
 export function updateExampleCounts(reset = false) {
   state.countChips.forEach((chip) => {

@@ -6,7 +6,7 @@ export const ARDUINO_SEND_COOLDOWN_MS = 500;
 export const DEFAULT_TRAINING_EPOCHS = 10;
 export const DEFAULT_TRAINING_BATCH_SIZE = 5;
 export const DEFAULT_TRAINING_LR = 0.001;
-export const SUPPORTED_MODES = ['image', 'gesture', 'face', 'pose'];
+export const SUPPORTED_MODES = ['image', 'gesture', 'face', 'audio', 'pose'];
 
 export const BAR_COLORS = [
   ['#f07818', '#ffd8ba'],
@@ -21,6 +21,7 @@ export const MODE_NAMES = {
   image: 'Bildklassifikation',
   gesture: 'Gestenerkennung',
   face: 'Gesichtserkennung',
+  audio: 'Audioerkennung',
   pose: 'Posen-Erkennung',
 };
 
@@ -33,3 +34,5 @@ export const CLASS_DEFAULT_PREFIX = 'Class';
 export const DEFAULT_COLLECT_LABEL = 'Zum Aufnehmen halten';
 export const DEFAULT_CAPTURE_LABEL = 'Webcam';
 export const POSE_CAPTURE_LABEL = 'Kamera';
+export const AUDIO_COLLECT_LABEL = 'Aufnehmen';
+export const AUDIO_CAPTURE_LABEL = 'Audio';

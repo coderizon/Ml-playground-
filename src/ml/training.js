@@ -21,9 +21,17 @@ import { renderProbabilities } from '../ui/probabilities.js';
 import { setMobileStep } from '../ui/steps.js';
 import { predictGesture, trainGestureModel } from './gesture.js';
 import { predictPose, trainPoseModel } from './pose.js';
+import {
+  collectAudioSample,
+  initAudio,
+  startAudioListening,
+  stopAudioListening,
+  trainAudioModel,
+} from './audio.js';
 
 const defaultTrainLabel = TRAIN_BUTTON ? TRAIN_BUTTON.textContent : 'Modell trainieren';
 const state = getState();
+const BACKGROUND_LABEL = '_background_noise_';
 
 export async function trainAndPredict() {
   if (state.trainingCompleted || state.trainingInProgress) return;
@@ -39,6 +47,9 @@ export async function trainAndPredict() {
       return;
     case 'pose':
       await trainPoseWorkflow();
+      return;
+    case 'audio':
+      await trainAudioWorkflow();
       return;
     default:
       await trainImageWorkflow();
@@ -114,6 +125,55 @@ async function trainPoseWorkflow() {
   }
 }
 
+async function trainAudioWorkflow() {
+  await initAudio();
+  const recognizer = state.audioTransferRecognizer;
+  if (!recognizer) {
+    if (STATUS) {
+      STATUS.innerText = 'Audio-Modell konnte nicht initialisiert werden.';
+    }
+    return;
+  }
+
+  const counts = recognizer.countExamples ? recognizer.countExamples() : null;
+  const collectedLabels =
+    counts && typeof counts === 'object'
+      ? Object.keys(counts).filter((key) => key !== BACKGROUND_LABEL && counts[key] > 0)
+      : [];
+
+  if (!collectedLabels.length) {
+    if (STATUS) {
+      STATUS.innerText = 'Bitte sammle zuerst Audio-Beispiele.';
+    }
+    return;
+  }
+
+  const { epochs } = getTrainingHyperparams();
+  setTrainingFlags({ predict: false, trainingInProgress: true, trainingCompleted: false });
+  setTrainingButtonState(true);
+  startTrainingUi(epochs);
+
+  try {
+    await trainAudioModel(epochs, {
+      onEpochEnd: (epoch, logs) => updateTrainingProgressUi(epoch + 1, epochs, logs),
+    });
+
+    setTrainingFlags({ predict: true, trainingCompleted: true, previewReady: true });
+    completeTrainingUi(epochs);
+    lockCapturePanels();
+    setMobileStep('preview');
+    await restartAudioPreview();
+    if (STATUS) {
+      STATUS.innerText = 'Audio-Modell trainiert. Sage deine Befehle!';
+    }
+  } catch (error) {
+    handleTrainingError(error);
+  } finally {
+    setTrainingFlags({ trainingInProgress: false });
+    setTrainingButtonState(false);
+  }
+}
+
 async function trainImageWorkflow() {
   if (!state.trainingDataInputs.length) {
     if (STATUS) {
@@ -161,6 +221,32 @@ async function trainImageWorkflow() {
     setTrainingFlags({ trainingInProgress: false });
     setTrainingButtonState(false);
   }
+}
+
+async function restartAudioPreview() {
+  try {
+    await stopAudioListening();
+  } catch (error) {
+    console.error(error);
+  }
+
+  const recognizer = state.audioTransferRecognizer;
+  if (!recognizer) return;
+
+  await startAudioListening((result) => {
+    const probabilities = state.classNames.map((name) => {
+      const labelIdx = result.labels?.indexOf(name) ?? -1;
+      return labelIdx >= 0 ? result.scores[labelIdx] : 0;
+    });
+    const bestIndex =
+      probabilities.length && probabilities.some((value) => value > 0)
+        ? probabilities.reduce(
+            (bestIdx, value, idx, arr) => (value > arr[bestIdx] ? idx : bestIdx),
+            0
+          )
+        : -1;
+    renderProbabilities(probabilities, bestIndex, state.classNames);
+  });
 }
 
 export function resetTrainingProgress() {
@@ -296,7 +382,7 @@ export function showPreview() {
 export async function predictLoop() {
   if (!state.predict) return;
 
-  if (state.currentMode === 'face') {
+  if (state.currentMode === 'face' || state.currentMode === 'audio') {
     return;
   }
 
@@ -362,6 +448,10 @@ export async function predictLoop() {
 
 export function handleCollectStart(event) {
   event.preventDefault();
+  if (state.currentMode === 'audio') {
+    startAudioCollection(event);
+    return;
+  }
   const classNumber = parseInt(event.currentTarget.getAttribute('data-1hot'), 10);
   if (Number.isNaN(classNumber)) return;
 
@@ -371,7 +461,27 @@ export function handleCollectStart(event) {
 
 export function handleCollectEnd(event) {
   event.preventDefault();
+  if (state.currentMode === 'audio') return;
   setState({ gatherDataState: STOP_DATA_GATHER });
+}
+
+function startAudioCollection(event) {
+  const target = event.currentTarget;
+  if (!(target instanceof HTMLElement)) return;
+
+  const rawName = target.getAttribute('data-name')?.trim();
+  const classIndex = parseInt(target.getAttribute('data-1hot'), 10);
+  const fallback =
+    Number.isFinite(classIndex) && state.classNames[classIndex]
+      ? state.classNames[classIndex]
+      : Number.isFinite(classIndex)
+      ? `Class ${classIndex + 1}`
+      : '';
+  const className = rawName || fallback;
+  if (!className) return;
+
+  const label = className.toLowerCase() === 'hintergrund' ? BACKGROUND_LABEL : className;
+  collectAudioSample(label);
 }
 
 async function dataGatherLoop() {

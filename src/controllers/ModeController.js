@@ -1,4 +1,13 @@
-import { DEFAULT_CAPTURE_LABEL, DEFAULT_COLLECT_LABEL, MODE_NAMES, POSE_CAPTURE_LABEL, STOP_DATA_GATHER, SUPPORTED_MODES } from '../constants.js';
+import {
+  AUDIO_CAPTURE_LABEL,
+  AUDIO_COLLECT_LABEL,
+  DEFAULT_CAPTURE_LABEL,
+  DEFAULT_COLLECT_LABEL,
+  MODE_NAMES,
+  POSE_CAPTURE_LABEL,
+  STOP_DATA_GATHER,
+  SUPPORTED_MODES,
+} from '../constants.js';
 import {
   CAPTURE_VIDEO,
   GESTURE_OVERLAY,
@@ -31,6 +40,7 @@ import {
 } from '../camera/webcam.js';
 import { resetTrainingProgress } from '../ml/training.js';
 import { ensurePoseLandmarker, resetPoseSamples, runPoseLoop, stopPoseLoop } from '../ml/pose.js';
+import { clearAudioExamples, initAudio, stopAudioListening } from '../ml/audio.js';
 
 const state = getState();
 const defaultTrainLabel = TRAIN_BUTTON ? TRAIN_BUTTON.textContent : 'Modell trainieren';
@@ -73,6 +83,8 @@ export async function setMode(newMode) {
     await activateGestureMode();
   } else if (newMode === 'face') {
     await activateFaceMode();
+  } else if (newMode === 'audio') {
+    await activateAudioMode();
   } else if (newMode === 'pose') {
     await activatePoseMode();
   } else {
@@ -87,6 +99,7 @@ export function resetApp() {
   stopGestureLoop();
   stopFaceLoop();
   stopPoseLoop();
+  stopAudioListening().catch(console.error);
   setState({
     predict: false,
     previewReady: false,
@@ -98,8 +111,10 @@ export function resetApp() {
   disposeTrainingData();
   resetGestureSamples();
   resetPoseSamples();
+  clearAudioExamples();
   mutateState((draft) => {
     draft.examplesCount.length = 0;
+    draft.isAudioListening = false;
   });
   resetTrainingProgress();
   updateExampleCounts(true);
@@ -145,6 +160,12 @@ export function resetApp() {
     if (STATUS) {
       STATUS.innerText = 'Gesichtserkennung aktiv.';
     }
+  } else if (state.currentMode === 'audio') {
+    setTrainButtonEnabled(true);
+    PREVIEW_VIDEO.classList.add('hidden');
+    if (STATUS) {
+      STATUS.innerText = 'Audio-Modus zurückgesetzt. Sammle neue Aufnahmen.';
+    }
   }
   setState({ lastPrediction: [] });
   if (state.currentMode === 'face') {
@@ -172,6 +193,7 @@ export function addClassAndReset() {
     setState({ model: null });
   }
   renderProbabilities([], -1, state.classNames);
+  updateClassCopyForMode(state.currentMode);
   if (STATUS) {
     STATUS.innerText = `Neue Klasse ${state.classNames[state.classNames.length - 1]} hinzugefügt.`;
   }
@@ -189,10 +211,19 @@ export function openCaptureForClass(idx) {
     );
   });
 
-  moveCaptureToSlot(idx);
-  enableCam();
-  if (STATUS) {
-    STATUS.innerText = `Webcam geöffnet für ${state.classNames[idx]}. Halte zum Aufnehmen.`;
+  if (state.currentMode !== 'audio') {
+    moveCaptureToSlot(idx);
+    enableCam();
+    if (STATUS) {
+      STATUS.innerText = `Webcam geöffnet für ${state.classNames[idx]}. Halte zum Aufnehmen.`;
+    }
+  } else {
+    if (CAPTURE_VIDEO) {
+      CAPTURE_VIDEO.classList.add('hidden');
+    }
+    if (STATUS) {
+      STATUS.innerText = `Bereit für ${state.classNames[idx]}. Klicke zum Audio-Aufnehmen.`;
+    }
   }
 }
 
@@ -202,6 +233,12 @@ export function closeCapturePanel(idx) {
 }
 
 export function handleSwitchCamera() {
+  if (state.currentMode === 'audio') {
+    if (STATUS) {
+      STATUS.innerText = 'Im Audio-Modus ist keine Kamera aktiv.';
+    }
+    return;
+  }
   const message = toggleCameraFacing();
   if (STATUS) {
     STATUS.innerText = message;
@@ -235,6 +272,11 @@ async function teardownCurrentMode() {
   stopGestureLoop();
   stopFaceLoop();
   stopPoseLoop();
+  try {
+    await stopAudioListening();
+  } catch (error) {
+    console.error(error);
+  }
 }
 
 async function activateGestureMode() {
@@ -299,6 +341,20 @@ async function activateFaceMode() {
   updateClassCopyForMode('face');
 }
 
+async function activateAudioMode() {
+  if (GESTURE_OVERLAY) {
+    GESTURE_OVERLAY.classList.add('hidden');
+    clearOverlay();
+  }
+  setMobileStep('collect');
+  PREVIEW_VIDEO.classList.add('hidden');
+  await initAudio();
+  updateClassCopyForMode('audio');
+  if (STATUS) {
+    STATUS.innerText = 'Audioerkennung aktiv. Sammle Samples und trainiere.';
+  }
+}
+
 async function activateImageMode() {
   if (GESTURE_OVERLAY) {
     GESTURE_OVERLAY.classList.add('hidden');
@@ -315,6 +371,14 @@ async function activateImageMode() {
 }
 
 function updateClassCopyForMode(mode) {
+  if (mode === 'audio') {
+    updateClassCardCopy({
+      openButtonLabel: AUDIO_CAPTURE_LABEL,
+      panelLabel: AUDIO_CAPTURE_LABEL,
+      collectorLabel: AUDIO_COLLECT_LABEL,
+    });
+    return;
+  }
   const panelLabel = mode === 'pose' ? POSE_CAPTURE_LABEL : DEFAULT_CAPTURE_LABEL;
   updateClassCardCopy({
     openButtonLabel: DEFAULT_CAPTURE_LABEL,
